@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="page-title">Seasons</h1>
+
+<form method="post" action="{{ url_for('create_season') }}" class="inline-form">
+  <input name="name" placeholder="New season name (e.g. Spring 2026)" required>
+  <button type="submit">Create season</button>
+</form>
+
+{% if seasons %}
+<div class="card-grid">
+  {% for s in seasons %}
+  <a class="card big-link" href="{{ url_for('season_home', season_id=s.id) }}">
+    <div class="card-title">{{ s.name }}</div>
+    <div class="muted">Created {{ s.created_at[:10] }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No seasons yet. Create one to get started.</p>
+{% endif %}
+{% endblock %}

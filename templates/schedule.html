@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Schedule — {{ season.name }}{% endblock %}
+{% block content %}
+{% with active='schedule' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">Schedule <span class="muted-small">{{ season.name }}</span></h1>
+
+{% if not weeks %}
+<p class="muted">No schedule yet. Generating creates a double round robin — every team plays every other team twice, one round per week.</p>
+<form method="post" action="{{ url_for('generate_schedule', season_id=season.id) }}">
+  <button type="submit">Generate schedule</button>
+</form>
+{% else %}
+{% for week, matches in weeks.items() %}
+<h2 class="week-head">Week {{ week }}</h2>
+<div class="match-list">
+  {% for m in matches %}
+  <a class="match-row" href="{{ url_for('match_page', match_id=m.id) }}">
+    <span class="match-teams">{{ m.home_name }} <em>vs</em> {{ m.away_name }}</span>
+    {% if m.completed %}
+      <span class="badge done">Final — {{ m.winner_name }} win{% if m.sudden_death_winner_team_id %} (SD){% endif %}</span>
+    {% else %}
+      <span class="badge open">Score it</span>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Teams — {{ season.name }}{% endblock %}
+{% block content %}
+{% with active='teams' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">Teams &amp; Rosters <span class="muted-small">{{ season.name }}</span></h1>
+
+<form method="post" action="{{ url_for('add_team', season_id=season.id) }}" class="inline-form">
+  <input name="name" placeholder="New team name" required>
+  <button type="submit">Add team</button>
+</form>
+{% if scheduled %}
+<p class="muted-small">A schedule exists for this season — teams can be renamed but not deleted, and new teams won't be added to the existing schedule.</p>
+{% endif %}
+
+<div class="card-grid">
+  {% for t in teams %}
+  <div class="card">
+    <form method="post" action="{{ url_for('rename_team', team_id=t.id) }}" class="team-head">
+      <input name="name" value="{{ t.name }}" class="team-name-input">
+      <button type="submit" class="ghost" title="Rename">Save</button>
+    </form>
+    <ul class="roster">
+      {% for p in by_team.get(t.id, []) %}
+      <li>
+        {{ p.name }}
+        <form method="post" action="{{ url_for('delete_player', player_id=p.id) }}" class="inline">
+          <button type="submit" class="ghost danger" title="Remove (only if no throws recorded)">✕</button>
+        </form>
+      </li>
+      {% else %}
+      <li class="muted">No players yet</li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="{{ url_for('add_player', team_id=t.id) }}" class="inline-form">
+      <input name="name" placeholder="Add player" required>
+      <button type="submit">Add</button>
+    </form>
+    {% if not scheduled %}
+    <form method="post" action="{{ url_for('delete_team', team_id=t.id) }}" class="inline" style="margin-top:8px">
+      <button type="submit" class="ghost danger">Delete team</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

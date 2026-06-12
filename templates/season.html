@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ season.name }} — Abilene Axe League{% endblock %}
+{% block content %}
+{% with active='home' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">{{ season.name }}</h1>
+
+<div class="card-grid">
+  <a class="card big-link" href="{{ url_for('teams_page', season_id=season.id) }}">
+    <div class="card-title">Teams &amp; Rosters</div>
+    <div class="muted">{{ n_teams }} team{{ '' if n_teams==1 else 's' }} registered</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('schedule_page', season_id=season.id) }}">
+    <div class="card-title">Schedule &amp; Scorekeeping</div>
+    <div class="muted">{{ n_done }} of {{ n_matches }} matches completed</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('standings_page', season_id=season.id) }}">
+    <div class="card-title">Standings</div>
+    <div class="muted">
+      {% if top %}Leader: {{ top[0].name }} ({{ top[0].wins }}–{{ top[0].losses }}){% else %}No results yet{% endif %}
+    </div>
+  </a>
+  <a class="card big-link" href="{{ url_for('stats_page', season_id=season.id) }}">
+    <div class="card-title">Player &amp; Team Stats</div>
+    <div class="muted">Averages, bullseyes, kill %, weekly trends</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('playoffs_page', season_id=season.id) }}">
+    <div class="card-title">Playoffs</div>
+    <div class="muted">{% if has_playoffs %}Bracket in progress{% else %}Double elimination — not created yet{% endif %}</div>
+  </a>
+</div>
+{% endblock %}
