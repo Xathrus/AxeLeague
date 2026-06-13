@@ -33,6 +33,7 @@ schema.sql        Database schema
 templates/        Jinja2 pages
 static/           scorekeeper.js + style.css
 seed_demo.py      Optional: seed a demo season with 6 teams
+set_password.py   Reset the Admin or Scorekeeper password from the shell
 smoke_test.py     End-to-end test of the whole rules engine
 deploy/           systemd unit + install script for the LXC
 ```
@@ -145,6 +146,17 @@ pct exec $CTID -- systemctl status axeleague
 pct exec $CTID -- journalctl -u axeleague -f
 pct exec $CTID -- systemctl restart axeleague
 ```
+
+### Forgot a password?
+
+Reset either login from the Proxmox host (you'll be prompted for the new one):
+
+```bash
+pct exec $CTID -- bash -c "cd /opt/axeleague && ./venv/bin/python set_password.py admin"
+pct exec $CTID -- bash -c "cd /opt/axeleague && ./venv/bin/python set_password.py scorekeeper"
+```
+
+Takes effect on the next login — no restart needed.
 
 ### Backups
 
