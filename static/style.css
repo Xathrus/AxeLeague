@@ -259,12 +259,15 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .form-error { background: #5a1f1a; border: 1px solid #c9342b; color: #ffd9d4;
   padding: 10px 12px; border-radius: 8px; margin: 12px 0; }
 
-.role-pick { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
-.role-option input { position: absolute; opacity: 0; }
-.role-card { display: block; padding: 12px 14px; border: 1px solid #4a3826;
-  border-radius: 10px; cursor: pointer; transition: border-color .12s, background .12s; }
-.role-card strong { display: block; margin-bottom: 2px; }
-.role-option input:checked + .role-card { border-color: #d9a441; background: #33261a; }
+.role-buttons { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+.role-btn { display: block; width: 100%; text-align: left; padding: 12px 14px;
+  font-weight: 700; font-size: 15px; background: #2a1f17; color: inherit;
+  border: 1px solid #4a3826; border-radius: 10px; cursor: pointer;
+  transition: border-color .12s, background .12s; }
+.role-btn .muted-small { display: block; font-weight: 400; margin-top: 2px; }
+.role-btn:hover { border-color: #d9a441; }
+.role-btn.active { border-color: #d9a441; background: #33261a; }
+#pw-field { margin-top: 6px; }
 
 .who { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .role-badge { font-size: 11px; letter-spacing: .08em; text-transform: uppercase;

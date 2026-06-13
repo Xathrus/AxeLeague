@@ -6,47 +6,49 @@
   {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
 
   <form method="post" action="{{ url_for('login', next=next) }}" class="auth-form" id="login-form">
-    <div class="role-pick">
-      <label class="role-option">
-        <input type="radio" name="role" value="admin" required>
-        <span class="role-card">
-          <strong>Admin</strong>
-          <span class="muted-small">Full access — seasons, teams, schedule, playoffs</span>
-        </span>
-      </label>
-      <label class="role-option">
-        <input type="radio" name="role" value="scorekeeper">
-        <span class="role-card">
-          <strong>Scorekeeper</strong>
-          <span class="muted-small">Score and edit matches</span>
-        </span>
-      </label>
-      <label class="role-option">
-        <input type="radio" name="role" value="viewer">
-        <span class="role-card">
-          <strong>View Games &amp; Stats</strong>
-          <span class="muted-small">Look around — no password needed</span>
-        </span>
-      </label>
+    <input type="hidden" name="role" id="role-input" value="">
+    <div class="role-buttons">
+      <button type="button" class="role-btn" data-role="admin">
+        Admin
+        <span class="muted-small">Full access</span>
+      </button>
+      <button type="button" class="role-btn" data-role="scorekeeper">
+        Scorekeeper
+        <span class="muted-small">Score and edit matches</span>
+      </button>
+      <button type="submit" class="role-btn" id="viewer-btn">
+        View Games &amp; Stats
+        <span class="muted-small">No password needed</span>
+      </button>
     </div>
 
-    <label id="pw-field">Password
-      <input type="password" name="password" autocomplete="current-password">
-    </label>
-
-    <button type="submit" class="primary">Enter</button>
+    <div id="pw-field" style="display:none">
+      <label>Password
+        <input type="password" name="password" id="pw-input" autocomplete="current-password">
+      </label>
+      <button type="submit" class="primary">Enter</button>
+    </div>
   </form>
 </div>
 <script>
-  const form = document.getElementById("login-form");
-  const pw = document.getElementById("pw-field");
-  function sync() {
-    const r = form.querySelector('input[name="role"]:checked');
-    const needsPw = r && r.value !== "viewer";
-    pw.style.display = needsPw ? "" : "none";
-    pw.querySelector("input").required = !!needsPw;
-  }
-  form.addEventListener("change", sync);
-  sync();
+  const roleInput = document.getElementById("role-input");
+  const pwField = document.getElementById("pw-field");
+  const pwInput = document.getElementById("pw-input");
+
+  document.querySelectorAll(".role-btn[data-role]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      roleInput.value = btn.dataset.role;
+      document.querySelectorAll(".role-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      pwField.style.display = "";
+      pwInput.required = true;
+      pwInput.focus();
+    });
+  });
+
+  document.getElementById("viewer-btn").addEventListener("click", () => {
+    roleInput.value = "viewer";
+    pwInput.required = false;
+  });
 </script>
 {% endblock %}
