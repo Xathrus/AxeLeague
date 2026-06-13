@@ -1,10 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Stats — {{ season.name }}{% endblock %}
-{% block content %}
-{% with active='stats' %}{% include "_season_nav.html" %}{% endwith %}
-<h1 class="page-title">Stats <span class="muted-small">{{ season.name }}</span></h1>
 
-<h2 class="week-head">Player — Season</h2>
+{% macro player_table(rows) %}
 <div class="table-scroll">
 <table class="stats-table">
   <thead><tr>
@@ -13,7 +10,7 @@
     <th>KS att</th><th>Kill %</th>
   </tr></thead>
   <tbody>
-  {% for p in players %}
+  {% for p in rows %}
   <tr>
     <td class="left">{{ p.name }}</td>
     <td class="left">{{ p.team }}</td>
@@ -31,8 +28,9 @@
   </tbody>
 </table>
 </div>
+{% endmacro %}
 
-<h2 class="week-head">Team — Season</h2>
+{% macro team_table(rows) %}
 <div class="table-scroll">
 <table class="stats-table">
   <thead><tr>
@@ -40,7 +38,7 @@
     <th>Bull %</th><th>Match W</th><th>Played</th>
   </tr></thead>
   <tbody>
-  {% for t in teams %}
+  {% for t in rows %}
   <tr>
     <td class="left">{{ t.name }}</td>
     <td>{{ '%.1f'|format(t.avg) if t.avg is not none else '—' }}</td>
@@ -54,14 +52,37 @@
   </tbody>
 </table>
 </div>
+{% endmacro %}
 
-<h2 class="week-head">Player — Weekly Average (per set)</h2>
+{% block content %}
+{% with active='stats' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">Stats <span class="muted-small">{{ season.name }}</span></h1>
+
+{% if has_playoff_data %}
+<div class="section-banner playoff">🏆 Playoffs</div>
+
+<h2 class="week-head">Player — Playoffs</h2>
+{{ player_table(p_players) }}
+
+<h2 class="week-head">Team — Playoffs</h2>
+{{ team_table(p_teams) }}
+
+<div class="section-banner">Regular Season</div>
+{% endif %}
+
+<h2 class="week-head">Player — Regular Season</h2>
+{{ player_table(players) }}
+
+<h2 class="week-head">Team — Regular Season</h2>
+{{ team_table(teams) }}
+
+<h2 class="week-head">Player — Average by Round (per set)</h2>
 {% if weeks %}
 <div class="table-scroll">
 <table class="stats-table">
   <thead><tr>
     <th class="left">Player</th><th class="left">Team</th>
-    {% for w in weeks %}<th>Wk {{ w }}</th>{% endfor %}
+    {% for w in weeks %}<th>Rd {{ w }}</th>{% endfor %}
   </tr></thead>
   <tbody>
   {% for p in weekly %}
@@ -77,6 +98,6 @@
 </table>
 </div>
 {% else %}
-<p class="muted">No weekly results yet.</p>
+<p class="muted">No round results yet.</p>
 {% endif %}
 {% endblock %}

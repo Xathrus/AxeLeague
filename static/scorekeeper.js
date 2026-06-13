@@ -114,7 +114,7 @@
 
     const sub = [];
     if (m.stage === "playoff") sub.push("Playoff match");
-    else if (m.week) sub.push(`Week ${m.week}`);
+    else if (m.week) sub.push(`Round ${m.week}`);
     if (st.ties) sub.push(`${st.ties} game${st.ties > 1 ? "s" : ""} tied`);
     h.appendChild(el("div", "muted-small center", sub.join(" · ")));
     return h;
@@ -129,7 +129,7 @@
         `Final — ${st.winner_team_name} win the match ${st.home_wins}–${st.away_wins}` +
         (m.sudden_death_winner_team_id ? " (sudden death)" : ""));
       wrap.appendChild(b);
-      if (m.stage !== "playoff") {
+      if (m.stage !== "playoff" && window.CAN_SCORE) {
         const btn = el("button", "ghost", "Reopen match");
         btn.onclick = () => api(`/api/match/${m.id}/reopen`);
         wrap.appendChild(btn);
@@ -140,11 +140,18 @@
         (m.sudden_death_winner_team_id ? " (sudden death)" : "") +
         ` — ${st.home_wins} game wins to ${st.away_wins}.`);
       wrap.appendChild(b);
-      const btn = el("button", "primary", "Complete match");
-      btn.onclick = () => api(`/api/match/${m.id}/complete`);
-      wrap.appendChild(btn);
+      if (window.CAN_SCORE) {
+        const btn = el("button", "primary", "Complete match");
+        btn.onclick = () => api(`/api/match/${m.id}/complete`);
+        wrap.appendChild(btn);
+      }
     } else if (st.state === "sudden_death") {
       const b = el("div", "sk-banner sd");
+      if (!window.CAN_SCORE) {
+        b.appendChild(el("div", "", "SUDDEN DEATH — waiting for the scorekeeper to declare a winner."));
+        wrap.appendChild(b);
+        return wrap;
+      }
       b.appendChild(el("div", "", "SUDDEN DEATH — one throw per player. Scorekeeper declares the winner:"));
       const sel = el("select");
       sel.appendChild(new Option("Select winner…", ""));
@@ -213,7 +220,8 @@
 
   function panel(s, side) {
     const m = state.match;
-    const locked = state.status.state === "completed" || m.completed;
+    const canScore = !!window.CAN_SCORE;
+    const locked = state.status.state === "completed" || m.completed || !canScore;
     const pid = s[side + "_player_id"];
     const pname = s[side + "_player_name"];
     const throws = s[side + "_throws"];
@@ -225,6 +233,10 @@
 
     // ---- player assignment / name
     if (!pid) {
+      if (!window.CAN_SCORE) {
+        p.appendChild(el("div", "muted-small center", "No thrower assigned yet"));
+        return p;
+      }
       const sel = el("select", "player-select");
       sel.appendChild(new Option(`Select ${teamName} thrower…`, ""));
       state.rosters[side].forEach(pl => sel.appendChild(new Option(pl.name, pl.id)));
@@ -288,7 +300,8 @@
 
     // ---- entry buttons
     if (locked) {
-      p.appendChild(el("div", "muted-small center", "Match completed — scoring locked"));
+      p.appendChild(el("div", "muted-small center",
+        canScore ? "Match completed — scoring locked" : "View only"));
       return p;
     }
     if (throws.length >= 10) {

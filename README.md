@@ -5,14 +5,18 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 
 ## Features
 
-- **Seasons, teams, rosters** — create seasons, add teams and players, edit anytime
-- **Double round robin scheduler** — every team plays every other team twice, auto-assigned to weeks
+- **Logins & roles** — on first start the app prompts you to create Admin and
+  Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
+  matches only; "View Games & Stats" needs no password and is read-only
+- **Seasons, teams, rosters** — create/rename/delete seasons, add teams and
+  players, rename players anytime; reset the schedule to bring new teams in
+- **Double round robin scheduler** — every team plays every other team twice, played one round at a time (Round 1, Round 2, …)
 - **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it
 - **Full rules engine** — 3 sets per game, 3 games per match, first to 2 game wins; ties handled per league rules; sudden death with manual winner selection; lane swap divider at throw 5
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **Short rosters** — the same player may throw multiple sets in a game
-- **Stats** — per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, KS attempts, kill %), per player per week, per team per season
+- **Stats** — regular season and playoffs tracked in separate sections; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, KS attempts, kill %), per player per round, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
 - **Playoffs** — double elimination bracket seeded by standings, byes auto-resolved, grand final reset match if the lower-bracket team wins GF1
 
@@ -20,6 +24,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 
 ```
 app.py            Flask routes (pages + JSON API)
+auth.py           Logins, roles, first-run setup
 scoring.py        Rules engine: outcomes, points, KS call logic, match state
 bracket.py        Round robin scheduler + double elimination bracket
 stats.py          Player/team stats and standings
@@ -51,7 +56,7 @@ cd axe-league
 git init
 git add .
 git commit -m "Abilene Axe League app"
-git remote add origin https://github.com/YOURUSER/axe-league.git
+git remote add origin https://github.com/Xathrus/AxeLeague.git
 git push -u origin main
 ```
 
@@ -98,7 +103,7 @@ instead of DHCP, e.g.:
 
 ```bash
 pct exec $CTID -- bash -c "apt-get update && apt-get install -y git"
-pct exec $CTID -- git clone https://github.com/YOURUSER/axe-league.git /opt/axeleague
+pct exec $CTID -- git clone https://github.com/Xathrus/AxeLeague.git /opt/axeleague
 pct exec $CTID -- bash /opt/axeleague/deploy/install.sh
 ```
 
@@ -111,7 +116,13 @@ pct exec $CTID -- bash -c "mkdir -p /opt/axeleague && tar xzf /root/axe-league.t
 pct exec $CTID -- bash /opt/axeleague/deploy/install.sh
 ```
 
-### 4. Open it
+### 4. Open it and create your logins
+
+The very first page you see prompts you to set the **Admin** and
+**Scorekeeper** passwords. After that, everyone picks a role on the login
+page; "View Games & Stats" requires no password.
+
+### Finding the address
 
 ```bash
 pct exec $CTID -- hostname -I

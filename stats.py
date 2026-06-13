@@ -2,8 +2,13 @@
 from collections import defaultdict
 
 
-def _player_set_rows(db, season_id):
-    """One row per (player, set) with totals and counts, regular + playoff."""
+def _player_set_rows(db, season_id, stage=None):
+    """One row per (player, set) with totals and counts.
+
+    stage=None -> all matches; 'regular' or 'playoff' filters by match stage.
+    """
+    extra = " AND m.stage = ?" if stage else ""
+    args = (season_id, stage) if stage else (season_id,)
     return db.execute(
         """
         SELECT t.player_id,
@@ -21,10 +26,10 @@ def _player_set_rows(db, season_id):
         JOIN sets s    ON s.id = t.set_id
         JOIN games g   ON g.id = s.game_id
         JOIN matches m ON m.id = g.match_id
-        WHERE m.season_id = ?
+        WHERE m.season_id = ?""" + extra + """
         GROUP BY t.player_id, s.id
         """,
-        (season_id,),
+        args,
     ).fetchall()
 
 
@@ -37,8 +42,8 @@ def _players(db, season_id):
     ).fetchall()
 
 
-def player_season_stats(db, season_id):
-    rows = _player_set_rows(db, season_id)
+def player_season_stats(db, season_id, stage=None):
+    rows = _player_set_rows(db, season_id, stage)
     by_player = defaultdict(list)
     for r in rows:
         by_player[r["player_id"]].append(r)
@@ -77,8 +82,9 @@ def player_season_stats(db, season_id):
 
 
 def player_weekly_averages(db, season_id):
-    """Returns (weeks, rows) where rows = [{name, team, weeks: {week: avg}}]."""
-    rows = _player_set_rows(db, season_id)
+    """Returns (rounds, rows) where rows = [{name, team, weeks: {round: avg}}].
+    Regular season only — playoff matches have no round number."""
+    rows = _player_set_rows(db, season_id, stage='regular')
     weeks = sorted({r["week"] for r in rows if r["week"] is not None})
     agg = defaultdict(lambda: defaultdict(list))
     for r in rows:
@@ -92,8 +98,8 @@ def player_weekly_averages(db, season_id):
     return weeks, out
 
 
-def team_season_stats(db, season_id):
-    rows = _player_set_rows(db, season_id)
+def team_season_stats(db, season_id, stage=None):
+    rows = _player_set_rows(db, season_id, stage)
     players = {p["id"]: p for p in _players(db, season_id)}
     teams = db.execute(
         "SELECT * FROM teams WHERE season_id=? ORDER BY name", (season_id,)
@@ -105,9 +111,10 @@ def team_season_stats(db, season_id):
         if p:
             by_team[p["team_id"]].append(r)
 
+    match_stage = stage or 'regular'
     match_rows = db.execute(
-        """SELECT * FROM matches WHERE season_id=? AND stage='regular'
-           AND completed=1""", (season_id,)).fetchall()
+        """SELECT * FROM matches WHERE season_id=? AND stage=?
+           AND completed=1""", (season_id, match_stage)).fetchall()
     wins = defaultdict(int)
     played = defaultdict(int)
     for m in match_rows:

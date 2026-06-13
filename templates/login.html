@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Log in — Abilene Axe League{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <h1 class="page-title">Log in</h1>
+  {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="{{ url_for('login', next=next) }}" class="auth-form" id="login-form">
+    <div class="role-pick">
+      <label class="role-option">
+        <input type="radio" name="role" value="admin" required>
+        <span class="role-card">
+          <strong>Admin</strong>
+          <span class="muted-small">Full access — seasons, teams, schedule, playoffs</span>
+        </span>
+      </label>
+      <label class="role-option">
+        <input type="radio" name="role" value="scorekeeper">
+        <span class="role-card">
+          <strong>Scorekeeper</strong>
+          <span class="muted-small">Score and edit matches</span>
+        </span>
+      </label>
+      <label class="role-option">
+        <input type="radio" name="role" value="viewer">
+        <span class="role-card">
+          <strong>View Games &amp; Stats</strong>
+          <span class="muted-small">Look around — no password needed</span>
+        </span>
+      </label>
+    </div>
+
+    <label id="pw-field">Password
+      <input type="password" name="password" autocomplete="current-password">
+    </label>
+
+    <button type="submit" class="primary">Enter</button>
+  </form>
+</div>
+<script>
+  const form = document.getElementById("login-form");
+  const pw = document.getElementById("pw-field");
+  function sync() {
+    const r = form.querySelector('input[name="role"]:checked');
+    const needsPw = r && r.value !== "viewer";
+    pw.style.display = needsPw ? "" : "none";
+    pw.querySelector("input").required = !!needsPw;
+  }
+  form.addEventListener("change", sync);
+  sync();
+</script>
+{% endblock %}

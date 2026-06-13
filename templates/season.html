@@ -28,4 +28,18 @@
     <div class="muted">{% if has_playoffs %}Bracket in progress{% else %}Double elimination — not created yet{% endif %}</div>
   </a>
 </div>
+
+{% if can_edit %}
+<div class="danger-zone">
+  <h2 class="week-head">Admin</h2>
+  <form method="post" action="{{ url_for('rename_season', season_id=season.id) }}" class="inline-form">
+    <input name="name" value="{{ season.name }}" required>
+    <button type="submit">Rename season</button>
+  </form>
+  <form method="post" action="{{ url_for('delete_season', season_id=season.id) }}" class="inline"
+        onsubmit="return confirm('Delete this entire season? Teams, players, schedule, scores, and playoffs will all be permanently removed.');">
+    <button type="submit" class="ghost danger">Delete season…</button>
+  </form>
+</div>
+{% endif %}
 {% endblock %}

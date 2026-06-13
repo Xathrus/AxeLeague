@@ -38,6 +38,47 @@ def q(sql, *args):
         return db.get_db().execute(sql, args).fetchall()
 
 
+# ---------------------------------------------------------------- auth
+r = c.get("/", follow_redirects=False)
+ok(r.status_code in (302, 303) and "/setup" in r.headers["Location"],
+   "first run redirects to setup")
+r = c.post("/setup", data={"admin_password": "adminpw", "admin_password2": "nope",
+                           "scorekeeper_password": "skpw",
+                           "scorekeeper_password2": "skpw"})
+ok(b"match" in r.data, "setup rejects mismatched passwords")
+r = c.post("/setup", data={"admin_password": "adminpw", "admin_password2": "adminpw",
+                           "scorekeeper_password": "skpw",
+                           "scorekeeper_password2": "skpw"})
+ok(r.status_code in (302, 303), "setup creates users and signs in")
+r = c.get("/setup", follow_redirects=False)
+ok(r.status_code in (302, 303), "setup unavailable once done")
+
+c.post("/logout")
+r = c.get("/", follow_redirects=False)
+ok("/login" in r.headers.get("Location", ""), "logged out -> login redirect")
+
+# viewer: read-only
+c.post("/login", data={"role": "viewer"})
+ok(c.get("/").status_code == 200, "viewer can view pages")
+r = c.post("/seasons", data={"name": "Nope"})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "viewer cannot create season")
+r = post_json("/api/set/1/throw", {"player_id": 1, "outcome": "1"})
+ok(r.status_code == 403, "viewer blocked from scoring API")
+c.post("/logout")
+
+# scorekeeper: wrong then right password
+r = c.post("/login", data={"role": "scorekeeper", "password": "wrong"})
+ok(b"Wrong password" in r.data, "wrong password rejected")
+c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = c.post("/seasons", data={"name": "Nope"})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "scorekeeper cannot create season")
+c.post("/logout")
+
+# admin for the rest of the run
+c.post("/login", data={"role": "admin", "password": "adminpw"})
+
 # ---------------------------------------------------------------- setup
 r = c.post("/seasons", data={"name": "Test Season"})
 ok(r.status_code in (302, 303), "create season")
@@ -119,6 +160,13 @@ st = state(m1)
 ok(st["games"][0]["home_total"] == 140 and st["games"][0]["away_total"] == 60,
    "game 1 totals 140-60")
 ok(st["games"][0]["winner"] == "home", "game 1 won by home")
+
+# scorekeeper role can record throws (switch roles mid-stream)
+c.post("/logout")
+c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+throw(ss[3]["id"], HP[1], "1", expect=400)  # set has no players assigned yet -> 400 (auth passed)
+c.post("/logout")
+c.post("/login", data={"role": "admin", "password": "adminpw"})
 
 # KS enforcement on game 2 set 1
 g2s1 = ss[3]["id"]
@@ -281,5 +329,60 @@ pm = q("SELECT id FROM matches WHERE season_id=? AND stage='playoff'"
        " AND completed=1 AND home_team_id IS NOT NULL LIMIT 1", season_id)[0]["id"]
 ok(post_json(f"/api/match/{pm}/reopen").status_code == 400,
    "playoff match reopen rejected")
+
+# ---------------------------------------------------------------- new admin features
+# playoff stats section appears on the stats page
+r = c.get(f"/season/{season_id}/stats")
+ok(b"Playoffs" in r.data, "playoff stats section shown once playoff data exists")
+with app.app_context():
+    d = db.get_db()
+    pp = {p["name"]: p for p in statsmod.player_season_stats(d, season_id,
+                                                             stage="playoff")}
+    rp = {p["name"]: p for p in statsmod.player_season_stats(d, season_id,
+                                                             stage="regular")}
+hname2 = "A1" if home_is_alpha else "B1"
+ok(rp[hname2]["high"] == 50, "regular-season stats exclude playoff sets")
+any_playoff = [p for p in pp.values() if p["sets"]]
+ok(len(any_playoff) > 0, "playoff stats computed separately")
+
+# rename player
+some_pid = pid["A1"]
+r = c.post(f"/player/{some_pid}/rename", data={"name": "A1 Renamed"})
+ok(r.status_code in (302, 303), "rename player accepted")
+new_name = q("SELECT name FROM players WHERE id=?", some_pid)[0]["name"]
+ok(new_name == "A1 Renamed", "player rename persisted")
+
+# rename season
+r = c.post(f"/season/{season_id}/rename", data={"name": "Renamed Season"})
+ok(q("SELECT name FROM seasons WHERE id=?", season_id)[0]["name"]
+   == "Renamed Season", "season rename persisted")
+
+# schedule page says Round, not Week
+r = c.get(f"/season/{season_id}/schedule")
+ok(b"Round 1" in r.data and b"Week 1" not in r.data,
+   "schedule shows Round labels")
+
+# reset schedule on a fresh throwaway season (with new team added after)
+c.post("/seasons", data={"name": "Scratch"})
+sid2 = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("X", "Y"):
+    c.post(f"/season/{sid2}/teams", data={"name": t})
+c.post(f"/season/{sid2}/schedule/generate")
+n1 = q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"]
+ok(n1 == 2, "scratch schedule generated (2 teams = 2 matches)")
+c.post(f"/season/{sid2}/teams", data={"name": "Z"})
+c.post(f"/season/{sid2}/schedule/reset")
+ok(q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"] == 0,
+   "schedule reset removed matches")
+c.post(f"/season/{sid2}/schedule/generate")
+n2 = q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"]
+ok(n2 == 6, f"regenerated schedule includes new team (3 teams = 6 matches, got {n2})")
+
+# delete season
+c.post(f"/season/{sid2}/delete")
+ok(q("SELECT COUNT(*) n FROM seasons WHERE id=?", sid2)[0]["n"] == 0,
+   "season deleted")
+ok(q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"] == 0,
+   "season delete cascaded to matches")
 
 print(f"\nALL {PASS} CHECKS PASSED")

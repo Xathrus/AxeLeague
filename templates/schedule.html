@@ -5,25 +5,42 @@
 <h1 class="page-title">Schedule <span class="muted-small">{{ season.name }}</span></h1>
 
 {% if not weeks %}
-<p class="muted">No schedule yet. Generating creates a double round robin — every team plays every other team twice, one round per week.</p>
+<p class="muted">No schedule yet. Generating creates a double round robin — every team plays every other team twice, one round at a time.</p>
+{% if can_edit %}
 <form method="post" action="{{ url_for('generate_schedule', season_id=season.id) }}">
   <button type="submit">Generate schedule</button>
 </form>
 {% else %}
+<p class="muted-small">An admin can generate the schedule.</p>
+{% endif %}
+{% else %}
 {% for week, matches in weeks.items() %}
-<h2 class="week-head">Week {{ week }}</h2>
+<h2 class="week-head">Round {{ week }}</h2>
 <div class="match-list">
   {% for m in matches %}
   <a class="match-row" href="{{ url_for('match_page', match_id=m.id) }}">
     <span class="match-teams">{{ m.home_name }} <em>vs</em> {{ m.away_name }}</span>
     {% if m.completed %}
       <span class="badge done">Final — {{ m.winner_name }} win{% if m.sudden_death_winner_team_id %} (SD){% endif %}</span>
-    {% else %}
+    {% elif can_score %}
       <span class="badge open">Score it</span>
+    {% else %}
+      <span class="badge open">In progress</span>
     {% endif %}
   </a>
   {% endfor %}
 </div>
 {% endfor %}
+
+{% if can_edit %}
+<div class="danger-zone">
+  <h2 class="week-head">Admin</h2>
+  <form method="post" action="{{ url_for('reset_schedule', season_id=season.id) }}"
+        onsubmit="return confirm('Reset the schedule? This deletes ALL matches in this season — including every recorded score and any playoff bracket. New teams can then be included when you regenerate. This cannot be undone.');">
+    <button type="submit" class="ghost danger">Reset schedule…</button>
+  </form>
+  <p class="muted-small">Deletes all matches and scores so the schedule can be regenerated — useful for adding new teams before play begins.</p>
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}

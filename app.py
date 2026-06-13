@@ -1,15 +1,98 @@
 import sqlite3
 
 from flask import (Flask, abort, jsonify, redirect, render_template, request,
-                   url_for)
+                   session, url_for)
 
+import auth
 import bracket as bracket_mod
 import scoring
 import stats as stats_mod
+from auth import admin_required, scorekeeper_required
 from db import get_db, init_db
 
 app = Flask(__name__)
 init_db(app)
+auth.ensure_schema()
+app.secret_key = auth.load_secret_key()
+
+
+# ---------------------------------------------------------------- auth gate
+
+@app.before_request
+def require_login():
+    open_endpoints = {"setup", "login", "logout", "static"}
+    if request.endpoint in open_endpoints or request.endpoint is None:
+        return None
+    db = get_db()
+    if not auth.setup_done(db):
+        return redirect(url_for("setup"))
+    if not session.get("role"):
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "Please log in."}), 401
+        return redirect(url_for("login", next=request.path))
+    return None
+
+
+@app.context_processor
+def inject_role():
+    role = session.get("role")
+    return {
+        "role": role,
+        "can_edit": role == "admin",
+        "can_score": role in ("admin", "scorekeeper"),
+    }
+
+
+@app.route("/setup", methods=["GET", "POST"])
+def setup():
+    db = get_db()
+    if auth.setup_done(db):
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        admin_pw = request.form.get("admin_password", "")
+        admin_pw2 = request.form.get("admin_password2", "")
+        sk_pw = request.form.get("scorekeeper_password", "")
+        sk_pw2 = request.form.get("scorekeeper_password2", "")
+        if len(admin_pw) < 4 or len(sk_pw) < 4:
+            error = "Passwords must be at least 4 characters."
+        elif admin_pw != admin_pw2 or sk_pw != sk_pw2:
+            error = "Passwords don't match. Re-enter them."
+        else:
+            auth.set_password(db, "admin", admin_pw)
+            auth.set_password(db, "scorekeeper", sk_pw)
+            db.commit()
+            session["role"] = "admin"
+            return redirect(url_for("index"))
+    return render_template("setup.html", error=error)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    db = get_db()
+    if not auth.setup_done(db):
+        return redirect(url_for("setup"))
+    error = None
+    nxt = request.args.get("next") or url_for("index")
+    if request.method == "POST":
+        role = request.form.get("role")
+        if role == "viewer":
+            session["role"] = "viewer"
+            return redirect(nxt)
+        if role in auth.ROLES:
+            if auth.check_password(db, role, request.form.get("password", "")):
+                session["role"] = role
+                return redirect(nxt)
+            error = "Wrong password."
+        else:
+            error = "Pick a login type."
+    return render_template("login.html", error=error, next=nxt)
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # ------------------------------------------------------------------ helpers
@@ -42,6 +125,7 @@ def index():
 
 
 @app.post("/seasons")
+@admin_required
 def create_season():
     name = request.form.get("name", "").strip()
     if name:
@@ -49,6 +133,56 @@ def create_season():
         db.execute("INSERT INTO seasons (name) VALUES (?)", (name,))
         db.commit()
     return redirect(url_for("index"))
+
+
+@app.post("/season/<int:season_id>/rename")
+@admin_required
+def rename_season(season_id):
+    _season_or_404(season_id)
+    name = request.form.get("name", "").strip()
+    if name:
+        db = get_db()
+        db.execute("UPDATE seasons SET name=? WHERE id=?", (name, season_id))
+        db.commit()
+    return redirect(url_for("season_home", season_id=season_id))
+
+
+@app.post("/season/<int:season_id>/delete")
+@admin_required
+def delete_season(season_id):
+    _season_or_404(season_id)
+    db = get_db()
+    db.execute("DELETE FROM seasons WHERE id=?", (season_id,))
+    db.commit()
+    return redirect(url_for("index"))
+
+
+@app.post("/season/<int:season_id>/schedule/reset")
+@admin_required
+def reset_schedule(season_id):
+    """Delete the regular-season schedule (and its scores, and any playoff
+    bracket built from it) so a new schedule — including new teams — can be
+    generated."""
+    _season_or_404(season_id)
+    db = get_db()
+    db.execute("DELETE FROM matches WHERE season_id=?", (season_id,))
+    db.commit()
+    return redirect(url_for("schedule_page", season_id=season_id))
+
+
+@app.post("/player/<int:player_id>/rename")
+@admin_required
+def rename_player(player_id):
+    db = get_db()
+    p = db.execute("SELECT * FROM players WHERE id=?", (player_id,)).fetchone()
+    if not p:
+        abort(404)
+    t = db.execute("SELECT * FROM teams WHERE id=?", (p["team_id"],)).fetchone()
+    name = request.form.get("name", "").strip()
+    if name:
+        db.execute("UPDATE players SET name=? WHERE id=?", (name, player_id))
+        db.commit()
+    return redirect(url_for("teams_page", season_id=t["season_id"]))
 
 
 @app.route("/season/<int:season_id>")
@@ -91,6 +225,7 @@ def teams_page(season_id):
 
 
 @app.post("/season/<int:season_id>/teams")
+@admin_required
 def add_team(season_id):
     _season_or_404(season_id)
     name = request.form.get("name", "").strip()
@@ -103,6 +238,7 @@ def add_team(season_id):
 
 
 @app.post("/team/<int:team_id>/players")
+@admin_required
 def add_player(team_id):
     db = get_db()
     t = db.execute("SELECT * FROM teams WHERE id=?", (team_id,)).fetchone()
@@ -117,6 +253,7 @@ def add_player(team_id):
 
 
 @app.post("/team/<int:team_id>/rename")
+@admin_required
 def rename_team(team_id):
     db = get_db()
     t = db.execute("SELECT * FROM teams WHERE id=?", (team_id,)).fetchone()
@@ -130,6 +267,7 @@ def rename_team(team_id):
 
 
 @app.post("/team/<int:team_id>/delete")
+@admin_required
 def delete_team(team_id):
     db = get_db()
     t = db.execute("SELECT * FROM teams WHERE id=?", (team_id,)).fetchone()
@@ -145,6 +283,7 @@ def delete_team(team_id):
 
 
 @app.post("/player/<int:player_id>/delete")
+@admin_required
 def delete_player(player_id):
     db = get_db()
     p = db.execute("SELECT p.*, t.season_id FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id=?",
@@ -179,6 +318,7 @@ def schedule_page(season_id):
 
 
 @app.post("/season/<int:season_id>/schedule/generate")
+@admin_required
 def generate_schedule(season_id):
     _season_or_404(season_id)
     db = get_db()
@@ -205,11 +345,26 @@ def standings_page(season_id):
 def stats_page(season_id):
     s = _season_or_404(season_id)
     db = get_db()
-    players = stats_mod.player_season_stats(db, season_id)
-    teams = stats_mod.team_season_stats(db, season_id)
+    players = stats_mod.player_season_stats(db, season_id, stage="regular")
+    teams = stats_mod.team_season_stats(db, season_id, stage="regular")
     weeks, weekly = stats_mod.player_weekly_averages(db, season_id)
+    # Playoff section appears once any playoff throws exist
+    has_playoff_data = db.execute(
+        """SELECT 1 FROM throws t
+           JOIN sets st ON st.id=t.set_id
+           JOIN games g ON g.id=st.game_id
+           JOIN matches m ON m.id=g.match_id
+           WHERE m.season_id=? AND m.stage='playoff' LIMIT 1""",
+        (season_id,)).fetchone() is not None
+    p_players = p_teams = None
+    if has_playoff_data:
+        p_players = stats_mod.player_season_stats(db, season_id, stage="playoff")
+        p_players = [p for p in p_players if p["sets"]]
+        p_teams = stats_mod.team_season_stats(db, season_id, stage="playoff")
     return render_template("stats.html", season=s, players=players,
-                           teams=teams, weeks=weeks, weekly=weekly)
+                           teams=teams, weeks=weeks, weekly=weekly,
+                           has_playoff_data=has_playoff_data,
+                           p_players=p_players, p_teams=p_teams)
 
 
 @app.route("/season/<int:season_id>/playoffs")
@@ -258,6 +413,7 @@ def playoffs_page(season_id):
 
 
 @app.post("/season/<int:season_id>/playoffs/create")
+@admin_required
 def create_playoffs(season_id):
     _season_or_404(season_id)
     db = get_db()
@@ -275,6 +431,7 @@ def create_playoffs(season_id):
 
 
 @app.post("/season/<int:season_id>/playoffs/reset")
+@admin_required
 def reset_playoffs(season_id):
     _season_or_404(season_id)
     db = get_db()
@@ -306,6 +463,7 @@ def api_state(match_id):
 
 
 @app.post("/api/set/<int:set_id>/assign")
+@scorekeeper_required
 def api_assign(set_id):
     db = get_db()
     s = db.execute("SELECT * FROM sets WHERE id=?", (set_id,)).fetchone()
@@ -339,6 +497,7 @@ def api_assign(set_id):
 
 
 @app.post("/api/set/<int:set_id>/throw")
+@scorekeeper_required
 def api_throw(set_id):
     db = get_db()
     s = db.execute("SELECT * FROM sets WHERE id=?", (set_id,)).fetchone()
@@ -376,6 +535,7 @@ def api_throw(set_id):
 
 
 @app.post("/api/set/<int:set_id>/undo")
+@scorekeeper_required
 def api_undo(set_id):
     db = get_db()
     s = db.execute("SELECT * FROM sets WHERE id=?", (set_id,)).fetchone()
@@ -397,6 +557,7 @@ def api_undo(set_id):
 
 
 @app.post("/api/throw/<int:throw_id>/edit")
+@scorekeeper_required
 def api_edit_throw(throw_id):
     db = get_db()
     t = db.execute("SELECT * FROM throws WHERE id=?", (throw_id,)).fetchone()
@@ -424,6 +585,7 @@ def api_edit_throw(throw_id):
 
 
 @app.post("/api/match/<int:match_id>/sudden_death")
+@scorekeeper_required
 def api_sudden_death(match_id):
     db = get_db()
     m = _match_or_404(match_id)
@@ -443,6 +605,7 @@ def api_sudden_death(match_id):
 
 
 @app.post("/api/match/<int:match_id>/complete")
+@scorekeeper_required
 def api_complete(match_id):
     db = get_db()
     m = _match_or_404(match_id)
@@ -463,6 +626,7 @@ def api_complete(match_id):
 
 
 @app.post("/api/match/<int:match_id>/reopen")
+@scorekeeper_required
 def api_reopen(match_id):
     db = get_db()
     m = _match_or_404(match_id)

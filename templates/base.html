@@ -12,6 +12,14 @@
     <span class="brand-axe">🪓</span> ABILENE <em>AXE</em> LEAGUE
   </a>
   {% block nav %}{% endblock %}
+  {% if role %}
+  <div class="who">
+    <span class="role-badge {{ role }}">{{ {'admin':'Admin','scorekeeper':'Scorekeeper','viewer':'Viewing'}[role] }}</span>
+    <form method="post" action="{{ url_for('logout') }}" class="inline">
+      <button type="submit" class="ghost tiny">Log out</button>
+    </form>
+  </div>
+  {% endif %}
 </header>
 <main class="wrap">
 {% block content %}{% endblock %}

@@ -2,10 +2,12 @@
 {% block content %}
 <h1 class="page-title">Seasons</h1>
 
+{% if can_edit %}
 <form method="post" action="{{ url_for('create_season') }}" class="inline-form">
   <input name="name" placeholder="New season name (e.g. Spring 2026)" required>
   <button type="submit">Create season</button>
 </form>
+{% endif %}
 
 {% if seasons %}
 <div class="card-grid">
