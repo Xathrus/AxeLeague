@@ -67,3 +67,10 @@ CREATE TABLE throws (
 
 CREATE INDEX idx_throws_set ON throws(set_id);
 CREATE INDEX idx_matches_season ON matches(season_id);
+
+CREATE TABLE IF NOT EXISTS round_dates (
+    season_id INTEGER NOT NULL REFERENCES seasons(id) ON DELETE CASCADE,
+    round INTEGER NOT NULL,
+    date TEXT NOT NULL,             -- ISO yyyy-mm-dd
+    PRIMARY KEY (season_id, round)
+);

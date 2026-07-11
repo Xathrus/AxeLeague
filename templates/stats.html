@@ -76,13 +76,13 @@
 <h2 class="week-head">Team — Regular Season</h2>
 {{ team_table(teams) }}
 
-<h2 class="week-head">Player — Average by Round (per set)</h2>
+<h2 class="week-head">Weekly Average <span class="muted-small">per set — rounds grouped by their scheduled date</span></h2>
 {% if weeks %}
 <div class="table-scroll">
 <table class="stats-table">
   <thead><tr>
     <th class="left">Player</th><th class="left">Team</th>
-    {% for w in weeks %}<th>Rd {{ w }}</th>{% endfor %}
+    {% for w in weeks %}<th>{{ w.label }}</th>{% endfor %}
   </tr></thead>
   <tbody>
   {% for p in weekly %}
@@ -90,7 +90,7 @@
     <td class="left">{{ p.name }}</td>
     <td class="left">{{ p.team }}</td>
     {% for w in weeks %}
-    <td>{{ '%.1f'|format(p.weeks[w]) if w in p.weeks else '—' }}</td>
+    <td>{{ '%.1f'|format(p.weeks[w.key]) if w.key in p.weeks else '—' }}</td>
     {% endfor %}
   </tr>
   {% endfor %}
@@ -98,6 +98,6 @@
 </table>
 </div>
 {% else %}
-<p class="muted">No round results yet.</p>
+<p class="muted">No results yet.</p>
 {% endif %}
 {% endblock %}

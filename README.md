@@ -11,12 +11,13 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Seasons, teams, rosters** — create/rename/delete seasons, add teams and
   players, rename players anytime; reset the schedule to bring new teams in
 - **Double round robin scheduler** — every team plays every other team twice, played one round at a time (Round 1, Round 2, …)
+- **Schedule control** — admin can move any match to any round (including a brand-new round) and set a date for each round; the schedule shows rounds grouped under their dates for everyone
 - **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it
 - **Full rules engine** — 3 sets per game, 3 games per match, first to 2 game wins; ties handled per league rules; sudden death with manual winner selection; lane swap divider at throw 5
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **Short rosters** — the same player may throw multiple sets in a game
-- **Stats** — regular season and playoffs tracked in separate sections; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, KS attempts, kill %), per player per round, per team per season
+- **Stats** — regular season and playoffs tracked in separate sections; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, KS attempts, kill %), Weekly Averages grouped by round dates, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
 - **Playoffs** — double elimination bracket seeded by standings, byes auto-resolved, grand final reset match if the lower-bracket team wins GF1
 

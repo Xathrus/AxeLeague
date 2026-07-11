@@ -29,6 +29,15 @@ def ensure_schema():
                password_hash TEXT NOT NULL
            )"""
     )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS round_dates (
+               season_id INTEGER NOT NULL
+                   REFERENCES seasons(id) ON DELETE CASCADE,
+               round INTEGER NOT NULL,
+               date TEXT NOT NULL,
+               PRIMARY KEY (season_id, round)
+           )"""
+    )
     conn.commit()
     conn.close()
 

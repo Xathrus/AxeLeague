@@ -287,3 +287,23 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 13px;
   background: #33261a; border: 1px solid #4a3826; color: #d8c9b4; }
 .section-banner.playoff { border-color: #d9a441; color: #d9a441; }
+
+/* ---------------- schedule dates & rearranging ---------------- */
+.date-head { margin: 28px 0 2px; font-size: 15px; letter-spacing: .06em;
+  text-transform: uppercase; color: #d9a441; border-bottom: 1px solid #4a3826;
+  padding-bottom: 6px; }
+.round-head { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.round-head .week-head { margin-bottom: 6px; }
+.round-date-form { display: inline-flex; align-items: center; gap: 6px; }
+.round-date-form input[type=date] { background: #1c1410; color: inherit;
+  border: 1px solid #4a3826; border-radius: 6px; padding: 3px 6px; }
+.match-row { display: flex; align-items: center; gap: 12px; }
+.match-link { flex: 1; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; text-decoration: none; color: inherit; }
+.move-form { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.move-form select { background: #1c1410; color: inherit; border: 1px solid #4a3826;
+  border-radius: 6px; padding: 3px 6px; }
+@media (max-width: 720px) {
+  .match-row { flex-wrap: wrap; }
+  .move-form { margin-left: 0; }
+}

@@ -314,7 +314,71 @@ def schedule_page(season_id):
     weeks = {}
     for m in matches:
         weeks.setdefault(m["week"], []).append(m)
-    return render_template("schedule.html", season=s, weeks=weeks)
+    dates = stats_mod.round_dates(db, season_id)
+    # Group rounds that share a date; keep round order within/between groups
+    groups = []  # [{date, rounds: [(round, matches)]}]
+    for w in sorted(weeks):
+        d = dates.get(w)
+        if groups and groups[-1]["date"] == d and d is not None:
+            groups[-1]["rounds"].append((w, weeks[w]))
+        else:
+            groups.append({"date": d, "rounds": [(w, weeks[w])]})
+    max_round = max(weeks) if weeks else 0
+    return render_template("schedule.html", season=s, weeks=weeks,
+                           groups=groups, dates=dates, max_round=max_round)
+
+
+@app.template_filter("fmt_date")
+def fmt_date(iso):
+    if not iso:
+        return ""
+    try:
+        from datetime import datetime
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%A, %b %-d, %Y")
+    except ValueError:
+        return iso
+
+
+@app.post("/season/<int:season_id>/round_date")
+@admin_required
+def set_round_date(season_id):
+    _season_or_404(season_id)
+    try:
+        rnd = int(request.form.get("round", ""))
+    except ValueError:
+        abort(400)
+    date = request.form.get("date", "").strip()
+    if request.form.get("clear"):
+        date = ""
+    db = get_db()
+    if date:
+        db.execute(
+            "INSERT INTO round_dates (season_id, round, date) VALUES (?, ?, ?)"
+            " ON CONFLICT(season_id, round) DO UPDATE SET date=excluded.date",
+            (season_id, rnd, date))
+    else:
+        db.execute("DELETE FROM round_dates WHERE season_id=? AND round=?",
+                   (season_id, rnd))
+    db.commit()
+    return redirect(url_for("schedule_page", season_id=season_id))
+
+
+@app.post("/match/<int:match_id>/move")
+@admin_required
+def move_match(match_id):
+    db = get_db()
+    m = db.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
+    if not m or m["stage"] != "regular":
+        abort(404)
+    try:
+        rnd = int(request.form.get("round", ""))
+    except ValueError:
+        abort(400)
+    if rnd < 1:
+        abort(400)
+    db.execute("UPDATE matches SET week=? WHERE id=?", (rnd, match_id))
+    db.commit()
+    return redirect(url_for("schedule_page", season_id=m["season_id"]))
 
 
 @app.post("/season/<int:season_id>/schedule/generate")

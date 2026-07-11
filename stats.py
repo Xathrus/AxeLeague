@@ -81,21 +81,52 @@ def player_season_stats(db, season_id, stage=None):
     return out
 
 
+def round_dates(db, season_id):
+    """{round: 'yyyy-mm-dd'} for rounds the admin has dated."""
+    return {r["round"]: r["date"] for r in db.execute(
+        "SELECT round, date FROM round_dates WHERE season_id=?",
+        (season_id,)).fetchall()}
+
+
+def _date_label(iso):
+    from datetime import datetime
+    try:
+        return datetime.strptime(iso, "%Y-%m-%d").strftime("%b %-d, %Y")
+    except ValueError:
+        return iso
+
+
 def player_weekly_averages(db, season_id):
-    """Returns (rounds, rows) where rows = [{name, team, weeks: {round: avg}}].
+    """Weekly per-set averages. Rounds that share an admin-set date are
+    combined into one week column labeled with that date; undated rounds get
+    their own 'Rd N' column. Returns (columns, rows) where columns is a list
+    of {key, label} and rows = [{name, team, weeks: {key: avg}}].
     Regular season only — playoff matches have no round number."""
     rows = _player_set_rows(db, season_id, stage='regular')
-    weeks = sorted({r["week"] for r in rows if r["week"] is not None})
+    dates = round_dates(db, season_id)
+
+    def col_key(week):
+        return ("d", dates[week]) if week in dates else ("r", week)
+
+    # column order follows round order (first round in each group decides)
+    first_round = {}
+    for w in sorted({r["week"] for r in rows if r["week"] is not None}):
+        first_round.setdefault(col_key(w), w)
+    columns = [
+        {"key": k, "label": _date_label(k[1]) if k[0] == "d" else f"Rd {k[1]}"}
+        for k, _ in sorted(first_round.items(), key=lambda kv: kv[1])
+    ]
+
     agg = defaultdict(lambda: defaultdict(list))
     for r in rows:
         if r["week"] is not None:
-            agg[r["player_id"]][r["week"]].append(r["total"])
+            agg[r["player_id"]][col_key(r["week"])].append(r["total"])
     out = []
     for p in _players(db, season_id):
-        wk = {w: (sum(v) / len(v)) for w, v in agg.get(p["id"], {}).items()}
+        wk = {k: (sum(v) / len(v)) for k, v in agg.get(p["id"], {}).items()}
         if wk:
             out.append({"name": p["name"], "team": p["team_name"], "weeks": wk})
-    return weeks, out
+    return columns, out
 
 
 def team_season_stats(db, season_id, stage=None):

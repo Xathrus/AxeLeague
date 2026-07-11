@@ -378,6 +378,56 @@ c.post(f"/season/{sid2}/schedule/generate")
 n2 = q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"]
 ok(n2 == 6, f"regenerated schedule includes new team (3 teams = 6 matches, got {n2})")
 
+# --- schedule rearranging & round dates (on the scratch season) ---
+mids = q("SELECT id, week FROM matches WHERE season_id=? ORDER BY id", sid2)
+nrounds = len({m["week"] for m in mids})
+ok(nrounds >= 3, f"scratch season has multiple rounds ({nrounds})")
+mv = mids[0]["id"]
+# viewer can't move
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+r = c.post(f"/match/{mv}/move", data={"round": 2})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "viewer cannot move matches")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+# admin moves match 1 -> round 3, then to brand-new round 4
+c.post(f"/match/{mv}/move", data={"round": 3})
+ok(q("SELECT week FROM matches WHERE id=?", mv)[0]["week"] == 3,
+   "match moved to round 3")
+newr = nrounds + 1
+c.post(f"/match/{mv}/move", data={"round": newr})
+ok(q("SELECT week FROM matches WHERE id=?", mv)[0]["week"] == newr,
+   f"match moved to brand-new round {newr}")
+r = c.post(f"/match/{mv}/move", data={"round": 0})
+ok(r.status_code == 400, "invalid round rejected")
+
+# round dates: set, display, group, clear
+c.post(f"/season/{sid2}/round_date", data={"round": 1, "date": "2026-07-18"})
+c.post(f"/season/{sid2}/round_date", data={"round": 2, "date": "2026-07-18"})
+c.post(f"/season/{sid2}/round_date", data={"round": newr, "date": "2026-07-25"})
+r = c.get(f"/season/{sid2}/schedule")
+ok(b"Saturday, Jul 18, 2026" in r.data, "round date shown on schedule")
+ok(r.data.count(b"Saturday, Jul 18, 2026") == 1,
+   "rounds sharing a date grouped under one date header")
+ok(b"Date not set" in r.data, "undated round shown under 'Date not set'")
+c.post(f"/season/{sid2}/round_date", data={"round": newr, "date": "x", "clear": "1"})
+ok(q("SELECT COUNT(*) n FROM round_dates WHERE season_id=? AND round=?",
+     sid2, newr)[0]["n"] == 0, "round date cleared")
+
+# weekly averages grouped by date (main season)
+c.post(f"/season/{season_id}/round_date", data={"round": 1, "date": "2026-07-04"})
+c.post(f"/season/{season_id}/round_date", data={"round": 2, "date": "2026-07-04"})
+with app.app_context():
+    cols, wrows = statsmod.player_weekly_averages(db.get_db(), season_id)
+labels = [cc["label"] for cc in cols]
+ok("Jul 4, 2026" in labels, "weekly average column labeled by date")
+ok(labels.count("Jul 4, 2026") == 1, "rounds 1+2 merged into one week column")
+ok(any(l.startswith("Rd ") for l in labels), "undated rounds keep Rd columns")
+jul4 = [cc for cc in cols if cc["label"] == "Jul 4, 2026"][0]
+ok(any(jul4["key"] in p["weeks"] for p in wrows),
+   "merged week has averaged data")
+r = c.get(f"/season/{season_id}/stats")
+ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
+
 # delete season
 c.post(f"/season/{sid2}/delete")
 ok(q("SELECT COUNT(*) n FROM seasons WHERE id=?", sid2)[0]["n"] == 0,
