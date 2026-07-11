@@ -1,0 +1,8 @@
+<nav class="season-nav">
+  <a href="{{ url_for('season_home', season_id=season.id) }}" {% if active=='home' %}class="active"{% endif %}>Overview</a>
+  <a href="{{ url_for('teams_page', season_id=season.id) }}" {% if active=='teams' %}class="active"{% endif %}>Teams &amp; Rosters</a>
+  <a href="{{ url_for('schedule_page', season_id=season.id) }}" {% if active=='schedule' %}class="active"{% endif %}>Schedule</a>
+  <a href="{{ url_for('standings_page', season_id=season.id) }}" {% if active=='standings' %}class="active"{% endif %}>Standings</a>
+  <a href="{{ url_for('stats_page', season_id=season.id) }}" {% if active=='stats' %}class="active"{% endif %}>Stats</a>
+  <a href="{{ url_for('playoffs_page', season_id=season.id) }}" {% if active=='playoffs' %}class="active"{% endif %}>Playoffs</a>
+</nav>

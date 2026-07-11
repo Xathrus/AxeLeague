@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ home_name }} vs {{ away_name }}{% endblock %}
+{% block content %}
+<div id="sk-root" class="sk-root">
+  <div class="muted">Loading match…</div>
+</div>
+<script>window.MATCH_ID = {{ match.id }}; window.CAN_SCORE = {{ "true" if can_score else "false" }};</script>
+<script src="{{ url_for('static', filename='scorekeeper.js') }}"></script>
+{% endblock %}
