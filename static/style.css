@@ -307,6 +307,3 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   .match-row { flex-wrap: wrap; }
   .move-form { margin-left: 0; }
 }
-
-/* manual lane switch */
-.lane-switch { display: block; margin: 14px auto 0; }
