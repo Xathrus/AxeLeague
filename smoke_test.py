@@ -324,6 +324,11 @@ for _ in range(60):
 with app.app_context():
     champ = bmod.champion(db.get_db(), season_id)
 ok(champ is not None, f"champion determined (team id {champ})")
+phantom5 = q("SELECT COUNT(*) n FROM matches WHERE season_id=?"
+             " AND stage='playoff' AND completed=1 AND winner_team_id IS NULL"
+             " AND (home_team_id IS NOT NULL OR away_team_id IS NOT NULL)",
+             season_id)[0]["n"]
+ok(phantom5 == 0, "5-team bracket: every match with a team has a real result")
 
 pm = q("SELECT id FROM matches WHERE season_id=? AND stage='playoff'"
        " AND completed=1 AND home_team_id IS NOT NULL LIMIT 1", season_id)[0]["id"]
@@ -493,6 +498,65 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
    "merged week has averaged data")
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
+
+# --- LB cross-bracket drops: no instant rematches (6-team repro) ---
+c.post("/seasons", data={"name": "Bracket Season"})
+sidB = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for i in range(1, 7):
+    c.post(f"/season/{sidB}/teams", data={"name": f"T{i}"})
+for row in q("SELECT id FROM teams WHERE season_id=?", sidB):
+    c.post(f"/team/{row['id']}/players", data={"name": f"P{row['id']}"})
+c.post(f"/season/{sidB}/schedule/generate")
+
+def _play_all(season, stage):
+    for _ in range(80):
+        nxt = q("SELECT id, home_team_id, away_team_id FROM matches"
+                " WHERE season_id=? AND stage=? AND completed=0"
+                " AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL"
+                " LIMIT 1", season, stage)
+        if not nxt:
+            break
+        mm = nxt[0]
+        hp = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+               mm["home_team_id"])[0]["id"]
+        ap = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+               mm["away_team_id"])[0]["id"]
+        sl = sets_of(mm["id"])
+        for gi in (0, 1):
+            for si in range(3):
+                sx = sl[gi*3+si]["id"]
+                assign(sx, hp, ap)
+                fill(sx, hp, ap, ["1"]*10 if si == 0 else ["M"]*10, ["M"]*10)
+        post_json(f"/api/match/{mm['id']}/complete")
+
+_play_all(sidB, "regular")
+c.post(f"/season/{sidB}/playoffs/create")
+_play_all(sidB, "playoff")
+
+wb1_pairs = {frozenset((m["home_team_id"], m["away_team_id"]))
+             for m in q("SELECT home_team_id, away_team_id FROM matches"
+                        " WHERE season_id=? AND stage='playoff' AND bracket='W'"
+                        " AND bracket_round=1 AND home_team_id IS NOT NULL"
+                        " AND away_team_id IS NOT NULL", sidB)}
+lb2_pairs = {frozenset((m["home_team_id"], m["away_team_id"]))
+             for m in q("SELECT home_team_id, away_team_id FROM matches"
+                        " WHERE season_id=? AND stage='playoff' AND bracket='L'"
+                        " AND bracket_round=2 AND home_team_id IS NOT NULL"
+                        " AND away_team_id IS NOT NULL", sidB)}
+ok(len(wb1_pairs) == 2, f"6-team bracket: 2 real WB R1 matches (got {len(wb1_pairs)})")
+ok(len(lb2_pairs) == 2, f"6-team bracket: 2 LB R2 matches (got {len(lb2_pairs)})")
+ok(not (wb1_pairs & lb2_pairs),
+   "LB round 2 no longer mirrors WB round 1 (cross-bracket drop)")
+with app.app_context():
+    okc = bmod.champion(db.get_db(), sidB)
+ok(okc is not None, "6-team bracket still resolves to a champion")
+phantom = q("SELECT COUNT(*) n FROM matches WHERE season_id=?"
+            " AND stage='playoff' AND completed=1 AND winner_team_id IS NULL"
+            " AND (home_team_id IS NOT NULL OR away_team_id IS NOT NULL)",
+            sidB)[0]["n"]
+ok(phantom == 0,
+   "no match with teams was phantom-completed as a bye (propagate fix)")
+c.post(f"/season/{sidB}/delete")
 
 # --- copy teams from another season ---
 c.post("/seasons", data={"name": "Next Season"})

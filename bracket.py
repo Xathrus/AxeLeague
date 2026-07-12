@@ -124,7 +124,18 @@ def create_bracket(db, season_id, seeds):
                 if r == 1:
                     l_to, l_pos = ids[("L", 1, slot // 2)], 1 + slot % 2
                 else:
-                    l_to, l_pos = ids[("L", 2 * (r - 1), slot)], 2
+                    # Cross-bracket drop: permute slots so a WB loser lands
+                    # against losers-bracket survivors from the other half of
+                    # the draw instead of an instant rematch (e.g. the team it
+                    # just beat/lost to in the previous WB round). Alternate
+                    # reverse / half-shift per drop round, standard for
+                    # double elimination.
+                    c = size >> r  # matches in LB round 2(r-1)
+                    if (r - 1) % 2 == 1:
+                        drop_slot = c - 1 - slot          # reverse
+                    else:
+                        drop_slot = (slot + c // 2) % c   # shift by half
+                    l_to, l_pos = ids[("L", 2 * (r - 1), drop_slot)], 2
             else:  # 2-team bracket: loser goes straight to the grand final
                 l_to, l_pos = gf, 2
             link(mid, w_to, w_pos, l_to, l_pos)
@@ -190,9 +201,15 @@ def propagate(db, season_id):
     while changed:
         changed = False
         rows = db.execute(
-            "SELECT * FROM matches WHERE season_id=? AND stage='playoff'"
+            "SELECT id FROM matches WHERE season_id=? AND stage='playoff'"
             " AND completed=0 ORDER BY id", (season_id,)).fetchall()
-        for m in rows:
+        for row in rows:
+            # Re-read live: an earlier advancement in this same pass may have
+            # placed a team into this match after the snapshot was taken.
+            m = db.execute("SELECT * FROM matches WHERE id=?",
+                           (row["id"],)).fetchone()
+            if m["completed"]:
+                continue
             feeders = _feeders(db, season_id, m["id"])
             if any(not f["completed"] for f in feeders):
                 continue
