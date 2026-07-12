@@ -368,10 +368,10 @@ ok(ov is not None, "league overview computed")
 ok(ov["avg_score"] > 0, "league average score present")
 ok(ov["drop_pct"] is not None and ov["bull_pct"] is not None,
    "league drop rate and bullseye ratio present")
-ok(ov["high_score"]["value"] == 60 and ov["high_score"]["name"],
-   f"league high score 60 with holder (got {ov['high_score']})")
-ok(ov["most_bulls"] and ov["most_bulls"]["value"] >= 10,
-   "most bullseyes leader found")
+ok(ov["high_score"]["value"] == 60 and len(ov["high_score"]["holders"]) >= 1,
+   f"league high score 60 with holder(s) (got {ov['high_score']})")
+ok(ov["most_bulls"] and ov["most_bulls"]["value"] >= 10
+   and ov["most_bulls"]["holders"], "most bullseyes leader found")
 ok(ov["best_kill_pct"] and 0 < ov["best_kill_pct"]["value"] <= 100,
    "best killshot%% leader found")
 r = c.get(f"/season/{season_id}/stats")
@@ -396,7 +396,18 @@ ok(len(whs) == len(cols0), "weekly highs have one card per weekly-average column
 ok([w["label"] for w in whs] == [cc["label"] for cc in cols0],
    "weekly high labels match weekly columns")
 ok(any(w["value"] == 60 for w in whs), "the 60-point set tops its week")
-ok(all(w["name"] and w["team"] for w in whs), "every weekly high has a holder")
+ok(all(w["holders"] for w in whs), "every weekly high has holder(s)")
+# filler matches give two different home players a 10-point set in the same
+# round, so at least one week must show a genuine tie with all names listed
+ok(any(len(w["holders"]) >= 2 for w in whs),
+   "tied weekly highs list every tied thrower")
+tied_week = [w for w in whs if len(w["holders"]) >= 2][0]
+ok(len({h["name"] for h in tied_week["holders"]}) == len(tied_week["holders"]),
+   "tied holders are unique players")
+names = [h["name"].lower() for h in tied_week["holders"]]
+ok(names == sorted(names), "tied holders listed alphabetically")
+r2 = c.get(f"/season/{season_id}/stats")
+ok(b"-way tie" in r2.data, "tie annotation rendered on stats page")
 ok(b"Weekly High Scores" in r.data, "stats page shows Weekly High Scores")
 ok(b"Current high score" in r.data, "overview shows current high score card")
 

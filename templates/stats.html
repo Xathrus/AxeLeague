@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Stats — {{ season.name }}{% endblock %}
 
+{% macro holder_lines(rec) %}
+{% for h in rec.holders %}<div class="ov-sub">{{ h.name }} · {{ h.team }}</div>{% endfor %}
+{% if rec.holders|length > 1 %}<div class="ov-tied">{{ rec.holders|length }}-way tie</div>{% endif %}
+{% endmacro %}
+
 {% macro player_table(rows) %}
 <div class="table-scroll">
 <table class="stats-table">
@@ -82,34 +87,35 @@
   <div class="ov-card">
     <div class="ov-label">High score</div>
     <div class="ov-value">{{ overview.high_score.value }}</div>
-    <div class="ov-sub">{{ overview.high_score.name }} · {{ overview.high_score.team }}</div>
+    {{ holder_lines(overview.high_score) }}
   </div>
   {% if weekly_highs %}
   <div class="ov-card">
     <div class="ov-label">Current high score</div>
     <div class="ov-value">{{ weekly_highs[-1].value }}</div>
-    <div class="ov-sub">{{ weekly_highs[-1].name }} · {{ weekly_highs[-1].team }} — {{ weekly_highs[-1].label }}</div>
+    {{ holder_lines(weekly_highs[-1]) }}
+    <div class="ov-sub muted">{{ weekly_highs[-1].label }}</div>
   </div>
   {% endif %}
   <div class="ov-card">
     <div class="ov-label">Best bullseye %</div>
     {% if overview.best_bull_pct %}
     <div class="ov-value">{{ '%.1f%%'|format(overview.best_bull_pct.value) }}</div>
-    <div class="ov-sub">{{ overview.best_bull_pct.name }} · {{ overview.best_bull_pct.team }}</div>
+    {{ holder_lines(overview.best_bull_pct) }}
     {% else %}<div class="ov-value">—</div>{% endif %}
   </div>
   <div class="ov-card">
     <div class="ov-label">Most bullseyes</div>
     {% if overview.most_bulls %}
     <div class="ov-value">{{ overview.most_bulls.value }}</div>
-    <div class="ov-sub">{{ overview.most_bulls.name }} · {{ overview.most_bulls.team }}</div>
+    {{ holder_lines(overview.most_bulls) }}
     {% else %}<div class="ov-value">—</div>{% endif %}
   </div>
   <div class="ov-card">
     <div class="ov-label">Best killshot %</div>
     {% if overview.best_kill_pct %}
     <div class="ov-value">{{ '%.1f%%'|format(overview.best_kill_pct.value) }}</div>
-    <div class="ov-sub">{{ overview.best_kill_pct.name }} · {{ overview.best_kill_pct.team }}</div>
+    {{ holder_lines(overview.best_kill_pct) }}
     {% else %}<div class="ov-value">—</div>{% endif %}
   </div>
 </div>
@@ -166,7 +172,7 @@
   <div class="ov-card">
     <div class="ov-label">{{ w.label }}</div>
     <div class="ov-value">{{ w.value }}</div>
-    <div class="ov-sub">{{ w.name }} · {{ w.team }}</div>
+    {{ holder_lines(w) }}
   </div>
   {% endfor %}
 </div>

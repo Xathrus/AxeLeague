@@ -247,8 +247,22 @@ def league_overview(db, season_id):
         p = players.get(pid)
         return {"name": p["name"], "team": p["team_name"]} if p else None
 
-    # high set score
-    hi = max(rows, key=lambda r: r["total"])
+    def holders(pids):
+        """Unique holders, name-sorted, for a list of player ids."""
+        out, seen = [], set()
+        for pid in pids:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            w = who(pid)
+            if w:
+                out.append(w)
+        return sorted(out, key=lambda h: h["name"].lower())
+
+    # high set score (all players tied at the top)
+    hi_total = max(r["total"] for r in rows)
+    hi_holders = holders([r["player_id"] for r in rows
+                          if r["total"] == hi_total])
 
     # per-player aggregates for the leader boards
     agg = defaultdict(lambda: {"bulls": 0, "non_ks": 0, "ks_att": 0, "ks_hit": 0})
@@ -263,8 +277,9 @@ def league_overview(db, season_id):
         items = [(pid, value(a)) for pid, a in pool if value(a) is not None]
         if not items:
             return None
-        pid, v = max(items, key=lambda kv: kv[1])
-        return {"value": v, **(who(pid) or {})}
+        best = max(v for _, v in items)
+        tied = [pid for pid, v in items if abs(v - best) < 1e-9]
+        return {"value": best, "holders": holders(tied)}
 
     bull_pool = [(pid, a) for pid, a in agg.items() if a["non_ks"] >= MIN_NON_KS]
     if not bull_pool:
@@ -277,7 +292,7 @@ def league_overview(db, season_id):
         "avg_score": sum(totals) / len(totals),
         "drop_pct": (100.0 * drops / n_throws) if n_throws else None,
         "bull_pct": (100.0 * bulls / non_ks) if non_ks else None,
-        "high_score": {"value": hi["total"], **(who(hi["player_id"]) or {})},
+        "high_score": {"value": hi_total, "holders": hi_holders},
         "best_bull_pct": leader(
             bull_pool,
             lambda a: (100.0 * a["bulls"] / a["non_ks"]) if a["non_ks"] else None),
@@ -311,20 +326,31 @@ def weekly_high_scores(db, season_id):
         if r["week"] is None:
             continue
         k = col_key(r["week"])
-        if k not in best or r["total"] > best[k]["total"]:
-            best[k] = r
+        if k not in best or r["total"] > best[k][0]:
+            best[k] = (r["total"], [r["player_id"]])
+        elif r["total"] == best[k][0]:
+            best[k][1].append(r["player_id"])
+
+    def holders(pids):
+        out, seen = [], set()
+        for pid in pids:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            p = players.get(pid)
+            if p:
+                out.append({"name": p["name"], "team": p["team_name"]})
+        return sorted(out, key=lambda h: h["name"].lower())
 
     out = []
     for k, _ in sorted(first_round.items(), key=lambda kv: kv[1]):
-        r = best.get(k)
-        if not r:
+        b = best.get(k)
+        if not b:
             continue
-        p = players.get(r["player_id"])
         out.append({
             "key": k,
             "label": _date_label(k[1]) if k[0] == "d" else f"Rd {k[1]}",
-            "value": r["total"],
-            "name": p["name"] if p else "?",
-            "team": p["team_name"] if p else "?",
+            "value": b[0],
+            "holders": holders(b[1]),
         })
     return out

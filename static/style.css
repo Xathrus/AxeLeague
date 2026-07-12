@@ -346,3 +346,8 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .stats-table th.sortable:hover { color: var(--gold); }
 .stats-table th.sort-desc::after { content: " ▼"; font-size: 10px; color: var(--gold); }
 .stats-table th.sort-asc::after { content: " ▲"; font-size: 10px; color: var(--gold); }
+
+/* tie annotations on record cards */
+.ov-tied { font-size: 11px; color: var(--gold); letter-spacing: .05em;
+  text-transform: uppercase; margin-top: 3px; }
+.ov-sub.muted { color: var(--ink-dim); }
