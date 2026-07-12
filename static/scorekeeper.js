@@ -25,6 +25,7 @@
     game: 0,            // index 0..2
     set: 0,             // index 0..2
     ks: {},             // playerId -> killshot armed
+    laneSwap: {},       // setId -> manual lane-switch override (visual)
     editing: null,      // {throwId, outcome, label}
     navigated: false,   // auto-jump to first open set once
     error: "",
@@ -177,8 +178,9 @@
         "sk-tab" + (i === ui.game ? " active" : "") + (g.complete ? " done" : ""));
       let res = "";
       if (g.complete) {
-        res = g.winner === "tie" ? " · TIE" :
-          g.winner === "home" ? " · H" : " · A";
+        const winName = g.winner === "home"
+          ? state.match.home_team_name : state.match.away_team_name;
+        res = g.winner === "tie" ? " · TIE" : ` · ${winName}`;
       }
       t.textContent = `Game ${g.number}  ${g.home_total}–${g.away_total}${res}`;
       t.onclick = () => { ui.game = i; ui.set = 0; ui.editing = null; render(); };
@@ -204,8 +206,10 @@
     const s = state.games[ui.game].sets[ui.set];
     const view = el("div", "sk-set");
 
-    const swapped = s.home_throws.length >= 5 && s.away_throws.length >= 5;
-    if (swapped && !s.complete) {
+    const autoSwapped = s.home_throws.length >= 5 && s.away_throws.length >= 5;
+    const manual = !!ui.laneSwap[s.id];
+    const swapped = autoSwapped !== manual; // manual button overrides either way
+    if (autoSwapped && !s.complete) {
       view.appendChild(el("div", "swap-chip", "⇄ Lanes swapped for throws 6–10"));
     }
 
@@ -215,6 +219,11 @@
     if (swapped) { panels.appendChild(away); panels.appendChild(home); }
     else { panels.appendChild(home); panels.appendChild(away); }
     view.appendChild(panels);
+
+    const sw = el("button", "ghost lane-switch", "⇄ Switch lanes");
+    sw.title = "Swap which side of the screen each team is shown on";
+    sw.onclick = () => { ui.laneSwap[s.id] = !manual; render(); };
+    view.appendChild(sw);
     return view;
   }
 
