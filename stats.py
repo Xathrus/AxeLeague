@@ -20,6 +20,7 @@ def _player_set_rows(db, season_id, stage=None):
                SUM(t.points) AS total,
                COUNT(*) AS n_throws,
                SUM(t.outcome = 'B')  AS bulls,
+               SUM(t.outcome IN ('D','KD')) AS drops,
                SUM(t.outcome IN ('KH','KD','KM')) AS ks_att,
                SUM(t.outcome = 'KH') AS ks_hit
         FROM throws t
@@ -56,14 +57,17 @@ def player_season_stats(db, season_id, stage=None):
                 "player_id": p["id"], "name": p["name"], "team": p["team_name"],
                 "games": 0, "sets": 0, "avg": None, "high": None, "low": None,
                 "fifty_pct": None, "bulls": 0, "bull_pct": None,
+                "drops": 0, "drop_pct": None,
                 "ks_att": 0, "kill_pct": None,
             })
             continue
         totals = [r["total"] for r in sets]
         n_throws = sum(r["n_throws"] for r in sets)
         bulls = sum(r["bulls"] for r in sets)
+        drops = sum(r["drops"] for r in sets)
         ks_att = sum(r["ks_att"] for r in sets)
         ks_hit = sum(r["ks_hit"] for r in sets)
+        non_ks = n_throws - ks_att  # bullseyes are impossible on KS attempts
         out.append({
             "player_id": p["id"], "name": p["name"], "team": p["team_name"],
             "games": len({r["game_id"] for r in sets}),
@@ -73,7 +77,9 @@ def player_season_stats(db, season_id, stage=None):
             "low": min(totals),
             "fifty_pct": 100.0 * sum(1 for t in totals if t >= 50) / len(totals),
             "bulls": bulls,
-            "bull_pct": (100.0 * bulls / n_throws) if n_throws else None,
+            "bull_pct": (100.0 * bulls / non_ks) if non_ks else None,
+            "drops": drops,
+            "drop_pct": (100.0 * drops / n_throws) if n_throws else None,
             "ks_att": ks_att,
             "kill_pct": (100.0 * ks_hit / ks_att) if ks_att else None,
         })
@@ -160,12 +166,13 @@ def team_season_stats(db, season_id, stage=None):
         totals = [r["total"] for r in sets]
         n_throws = sum(r["n_throws"] for r in sets)
         bulls = sum(r["bulls"] for r in sets)
+        non_ks = n_throws - sum(r["ks_att"] for r in sets)
         out.append({
             "team_id": t["id"], "name": t["name"],
             "avg": (sum(totals) / len(totals)) if totals else None,
             "high": max(totals) if totals else None,
             "fifty_count": sum(1 for x in totals if x >= 50),
-            "bull_pct": (100.0 * bulls / n_throws) if n_throws else None,
+            "bull_pct": (100.0 * bulls / non_ks) if non_ks else None,
             "match_wins": wins.get(t["id"], 0),
             "matches_played": played.get(t["id"], 0),
         })
@@ -210,3 +217,75 @@ def standings(db, season_id):
     rows = list(rec.values())
     rows.sort(key=lambda r: (-r["wins"], r["losses"], -r["bulls"], r["name"]))
     return rows
+
+
+def league_overview(db, season_id):
+    """Season-to-date league summary across regular season AND playoffs.
+
+    Bullseye percentages exclude killshot attempts from the denominator,
+    since a killshot attempt can never score a bullseye. Percentage-based
+    leaders require a minimum body of work (MIN_NON_KS non-killshot throws,
+    MIN_KS_ATT killshot attempts) so a hot first set doesn't top the board;
+    if nobody qualifies yet, everyone is considered.
+    """
+    MIN_NON_KS = 30
+    MIN_KS_ATT = 5
+
+    rows = _player_set_rows(db, season_id)
+    if not rows:
+        return None
+    players = {p["id"]: p for p in _players(db, season_id)}
+
+    totals = [r["total"] for r in rows]
+    n_throws = sum(r["n_throws"] for r in rows)
+    bulls = sum(r["bulls"] for r in rows)
+    drops = sum(r["drops"] for r in rows)
+    ks_att = sum(r["ks_att"] for r in rows)
+    non_ks = n_throws - ks_att
+
+    def who(pid):
+        p = players.get(pid)
+        return {"name": p["name"], "team": p["team_name"]} if p else None
+
+    # high set score
+    hi = max(rows, key=lambda r: r["total"])
+
+    # per-player aggregates for the leader boards
+    agg = defaultdict(lambda: {"bulls": 0, "non_ks": 0, "ks_att": 0, "ks_hit": 0})
+    for r in rows:
+        a = agg[r["player_id"]]
+        a["bulls"] += r["bulls"]
+        a["non_ks"] += r["n_throws"] - r["ks_att"]
+        a["ks_att"] += r["ks_att"]
+        a["ks_hit"] += r["ks_hit"]
+
+    def leader(pool, value):
+        items = [(pid, value(a)) for pid, a in pool if value(a) is not None]
+        if not items:
+            return None
+        pid, v = max(items, key=lambda kv: kv[1])
+        return {"value": v, **(who(pid) or {})}
+
+    bull_pool = [(pid, a) for pid, a in agg.items() if a["non_ks"] >= MIN_NON_KS]
+    if not bull_pool:
+        bull_pool = list(agg.items())
+    ks_pool = [(pid, a) for pid, a in agg.items() if a["ks_att"] >= MIN_KS_ATT]
+    if not ks_pool:
+        ks_pool = [(pid, a) for pid, a in agg.items() if a["ks_att"] > 0]
+
+    return {
+        "avg_score": sum(totals) / len(totals),
+        "drop_pct": (100.0 * drops / n_throws) if n_throws else None,
+        "bull_pct": (100.0 * bulls / non_ks) if non_ks else None,
+        "high_score": {"value": hi["total"], **(who(hi["player_id"]) or {})},
+        "best_bull_pct": leader(
+            bull_pool,
+            lambda a: (100.0 * a["bulls"] / a["non_ks"]) if a["non_ks"] else None),
+        "most_bulls": leader(
+            list(agg.items()), lambda a: a["bulls"] or None),
+        "best_kill_pct": leader(
+            ks_pool,
+            lambda a: (100.0 * a["ks_hit"] / a["ks_att"]) if a["ks_att"] else None),
+        "min_non_ks": MIN_NON_KS,
+        "min_ks_att": MIN_KS_ATT,
+    }

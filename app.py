@@ -425,10 +425,12 @@ def stats_page(season_id):
         p_players = stats_mod.player_season_stats(db, season_id, stage="playoff")
         p_players = [p for p in p_players if p["sets"]]
         p_teams = stats_mod.team_season_stats(db, season_id, stage="playoff")
+    overview = stats_mod.league_overview(db, season_id)
     return render_template("stats.html", season=s, players=players,
                            teams=teams, weeks=weeks, weekly=weekly,
                            has_playoff_data=has_playoff_data,
-                           p_players=p_players, p_teams=p_teams)
+                           p_players=p_players, p_teams=p_teams,
+                           overview=overview)
 
 
 @app.route("/season/<int:season_id>/playoffs")

@@ -345,6 +345,39 @@ ok(rp[hname2]["high"] == 50, "regular-season stats exclude playoff sets")
 any_playoff = [p for p in pp.values() if p["sets"]]
 ok(len(any_playoff) > 0, "playoff stats computed separately")
 
+# drops / drop rate and KS-excluded bull%
+# HP[1] in match 1: 100 throws total? No — count his throws:
+#   g1s1: 10, g2s1: 10 (incl KH,KM,D,KD,KH), g3 sets 1-3: 30 -> 50 throws
+#   drops = D + KD = 2 -> drop rate 4%
+#   bulls = 0; non-KS throws = 50 - 4 = 46 -> bull% = 0
+hstats = rp[hname2]
+ok(hstats["drops"] == 2, f"{hname2} drop count 2 (got {hstats['drops']})")
+exp_drop = 100.0 * 2 / (hstats["sets"] * 10)  # every set is 10 throws
+ok(abs(hstats["drop_pct"] - exp_drop) < 1e-9,
+   f"{hname2} drop rate {exp_drop:.2f}% (got {hstats['drop_pct']:.2f}%)")
+# A2/B2 (10 throws all bullseyes in g1s2, 10 misses in g2s2, 0 KS):
+# bull% = 100*10/20 = 50 with KS-free denominator
+h2s = rp["A2" if home_is_alpha else "B2"]
+ok(abs(h2s["bull_pct"] - 50.0) < 1e-9,
+   f"bull%% excludes KS attempts (got {h2s['bull_pct']})")
+
+# league overview
+with app.app_context():
+    ov = statsmod.league_overview(db.get_db(), season_id)
+ok(ov is not None, "league overview computed")
+ok(ov["avg_score"] > 0, "league average score present")
+ok(ov["drop_pct"] is not None and ov["bull_pct"] is not None,
+   "league drop rate and bullseye ratio present")
+ok(ov["high_score"]["value"] == 60 and ov["high_score"]["name"],
+   f"league high score 60 with holder (got {ov['high_score']})")
+ok(ov["most_bulls"] and ov["most_bulls"]["value"] >= 10,
+   "most bullseyes leader found")
+ok(ov["best_kill_pct"] and 0 < ov["best_kill_pct"]["value"] <= 100,
+   "best killshot%% leader found")
+r = c.get(f"/season/{season_id}/stats")
+ok(b"League Overview" in r.data, "stats page shows League Overview")
+ok(b"Drop %" in r.data, "player table shows Drop %% column")
+
 # rename player
 some_pid = pid["A1"]
 r = c.post(f"/player/{some_pid}/rename", data={"name": "A1 Renamed"})

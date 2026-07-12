@@ -17,7 +17,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **Short rosters** — the same player may throw multiple sets in a game
-- **Stats** — regular season and playoffs tracked in separate sections; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, KS attempts, kill %), Weekly Averages grouped by round dates, per team per season
+- **Stats** — regular season and playoffs tracked in separate sections; League Overview cards (league average, drop rate, bullseye ratio, high score and record holders); per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, drops, drop %, KS attempts, kill %). Bullseye percentages exclude killshot attempts, since a killshot can't score a bullseye, Weekly Averages grouped by round dates, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
 - **Playoffs** — double elimination bracket seeded by standings, byes auto-resolved, grand final reset match if the lower-bracket team wins GF1
 
