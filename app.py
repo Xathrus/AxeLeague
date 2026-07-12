@@ -6,6 +6,7 @@ from flask import (Flask, abort, jsonify, redirect, render_template, request,
 import auth
 import bracket as bracket_mod
 import branding as branding_mod
+import csv_import
 import scoring
 import stats as stats_mod
 from auth import admin_required, scorekeeper_required
@@ -604,6 +605,38 @@ def reset_playoffs(season_id):
                (season_id,))
     db.commit()
     return redirect(url_for("playoffs_page", season_id=season_id))
+
+
+@app.post("/match/<int:match_id>/import")
+@admin_required
+def import_match_csv(match_id):
+    db = get_db()
+    m = db.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
+    if not m:
+        abort(404)
+    if m["completed"]:
+        return redirect(url_for("match_page", match_id=match_id,
+                                e="This match is completed — reopen it before importing."))
+    f = request.files.get("csv")
+    if not f or not f.filename:
+        return redirect(url_for("match_page", match_id=match_id,
+                                e="Choose a CSV file first."))
+    home = db.execute("SELECT name FROM teams WHERE id=?",
+                      (m["home_team_id"],)).fetchone()["name"]
+    away = db.execute("SELECT name FROM teams WHERE id=?",
+                      (m["away_team_id"],)).fetchone()["name"]
+    try:
+        parsed = csv_import.parse(f.read(), home, away)
+    except csv_import.ImportError_ as e:
+        return redirect(url_for("match_page", match_id=match_id, e=str(e)))
+    summary = csv_import.apply(db, m, parsed)
+    db.commit()
+    msg = (f"Imported {summary['throws']} throws across "
+           f"{summary['sets']} set entries.")
+    if summary["created_players"]:
+        msg += " New players added: " + ", ".join(
+            sorted(set(summary["created_players"]))) + "."
+    return redirect(url_for("match_page", match_id=match_id, m=msg))
 
 
 @app.route("/match/<int:match_id>")

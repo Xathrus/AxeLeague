@@ -17,6 +17,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Full rules engine** — 3 sets per game, 3 games per match, first to 2 game wins; ties handled per league rules; sudden death with manual winner selection; lane swap divider at throw 5
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
+- **CSV score import** — admin can upload a CSV on any match page to import its scores in one shot (replaces anything already recorded). Columns: `Game, Set, Thrower, Team, Throw 1 … Throw 10`; values 1-5, 6 = bullseye, 8 = killshot hit, or Miss / Drop / Kill Miss / Kill Drop; unknown throwers are added to the roster automatically. See `SampleMatch.csv`
 - **Short rosters** — the same player may throw multiple sets in a game
 - **Stats** — regular season and playoffs tracked in separate sections; League Overview cards (regular-season league average, drop rate, bullseye ratio, season and current-week high scores, record holders) plus Weekly High Score cards per round date; every stats table sorts by clicking a column header; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, drops, drop %, KS attempts, kill %). Bullseye percentages exclude killshot attempts, since a killshot can't score a bullseye, Weekly Averages grouped by round dates, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
@@ -37,6 +38,8 @@ templates/        Jinja2 pages
 static/           scorekeeper.js + style.css
 seed_demo.py      Optional: seed a demo season with 6 teams
 set_password.py   Reset the Admin or Scorekeeper password from the shell
+csv_import.py     CSV score import parser/validator
+SampleMatch.csv   Example import file
 smoke_test.py     End-to-end test of the whole rules engine
 deploy/           systemd unit + install script for the LXC
 ```

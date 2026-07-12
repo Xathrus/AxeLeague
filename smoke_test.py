@@ -494,6 +494,116 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- CSV import (uses the real sample file) ---
+import io
+sample = open("SampleMatch.csv", "rb").read()
+
+def csv_named(data, home, away):
+    """Rewrite the sample's team names onto an actual match's teams."""
+    t = data.decode("utf-8-sig")
+    t = t.replace("Axe of Violence", home).replace("Tomahawks", away)
+    return t.encode("utf-8")
+
+# fresh season so the import doesn't disturb earlier assertions
+c.post("/seasons", data={"name": "Import Season"})
+sid3 = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Axe of Violence", "Tomahawks"):
+    c.post(f"/season/{sid3}/teams", data={"name": t})
+c.post(f"/season/{sid3}/schedule/generate")
+im = q("SELECT * FROM matches WHERE season_id=? ORDER BY id LIMIT 1", sid3)[0]
+imid = im["id"]
+hname3 = q("SELECT name FROM teams WHERE id=?", im["home_team_id"])[0]["name"]
+aname3 = q("SELECT name FROM teams WHERE id=?", im["away_team_id"])[0]["name"]
+
+# viewer / scorekeeper can't import
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(sample), "s.csv")},
+           content_type="multipart/form-data")
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "scorekeeper cannot import CSV")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+
+# happy path: the provided sample imports cleanly
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(csv_named(sample, hname3, aname3)), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"Imported 180 throws" in r.data,
+   "sample CSV imported (18 rows x 10 throws)")
+ok(b"New players added" in r.data, "unknown throwers auto-created")
+nplayers = q("SELECT COUNT(*) n FROM players p JOIN teams t ON p.team_id=t.id"
+             " WHERE t.season_id=?", sid3)[0]["n"]
+ok(nplayers == 6, f"6 throwers created from CSV (got {nplayers})")
+
+st3 = state(imid)
+# spot-check from the sample: Game 1 Set 1 = Curtis 53 (5,5,4,6,5,6,4,6,6,6)
+# vs Doc 57 (5,6,6,5,6,6,6,6,6,5); verify a known killshot too
+g1s1 = st3["games"][0]["sets"][0]
+totals = {g1s1["home_player_name"]: sum(t["points"] for t in g1s1["home_throws"]),
+          g1s1["away_player_name"]: sum(t["points"] for t in g1s1["away_throws"])}
+ok(totals.get("Curtis Johnson") == 53, f"Curtis G1S1 = 53 (got {totals})")
+ok(totals.get('Patrick "Doc" Bruton') == 57,
+   "quoted thrower name parsed correctly (Doc = 57)")
+g1s3 = st3["games"][0]["sets"][2]
+last = (g1s3["home_throws"] + g1s3["away_throws"])
+ok(any(t["outcome"] == "KH" for t in last), "score of 8 imported as killshot hit")
+g3s3 = st3["games"][2]["sets"][2]
+kms = [t for t in g3s3["home_throws"] + g3s3["away_throws"]
+       if t["outcome"] == "KM"]
+ok(len(kms) == 3, f"'Kill Miss' cells imported as KM (got {len(kms)})")
+ok(st3["status"]["state"] in ("decided", "sudden_death", "in_progress"),
+   "match state recomputed after import")
+
+# re-import replaces, not duplicates
+c.post(f"/match/{imid}/import",
+       data={"csv": (io.BytesIO(csv_named(sample, hname3, aname3)), "s.csv")},
+       content_type="multipart/form-data")
+nth = q("""SELECT COUNT(*) n FROM throws t JOIN sets s ON s.id=t.set_id
+           JOIN games g ON g.id=s.game_id WHERE g.match_id=?""", imid)[0]["n"]
+ok(nth == 180, f"re-import replaced scores (180 throws, got {nth})")
+np2 = q("SELECT COUNT(*) n FROM players p JOIN teams t ON p.team_id=t.id"
+        " WHERE t.season_id=?", sid3)[0]["n"]
+ok(np2 == 6, "re-import didn't duplicate players")
+
+# error cases: wrong team, bad value, KS overuse, gap, completed match
+bad = csv_named(sample, hname3, aname3).decode().replace(hname3, "Wrong Team", 1)
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(bad.encode()), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"isn&#39;t in this match" in r.data or b"isn't in this match" in r.data,
+   "unknown team rejected with row number")
+bad2 = csv_named(sample, hname3, aname3).decode().replace(",6\r\n", ",7\r\n", 1)
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(bad2.encode()), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"unrecognized throw value" in r.data, "invalid score value rejected")
+hdr = "Game,Set,Thrower,Team," + ",".join(f"Throw {i}" for i in range(1, 11))
+ks_bad = hdr + "\r\n" + f"1,1,P1,{hname3},8,8,8,1,1,1,1,1,1,1\r\n"
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(ks_bad.encode()), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"killshot calls exceed" in r.data, "impossible killshot sequence rejected")
+gap = hdr + "\r\n" + f"1,1,P1,{hname3},1,1,,1,1,1,1,1,1,1\r\n"
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(gap.encode()), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"no gaps" in r.data, "gap in throws rejected")
+partial = hdr + "\r\n" + f"1,1,P1,{hname3},1,2,3,,,,,,,\r\n"
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(partial.encode()), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"Imported 3 throws" in r.data, "partial set (trailing blanks) accepted")
+# completed matches refuse imports
+c.post(f"/match/{imid}/import",
+       data={"csv": (io.BytesIO(csv_named(sample, hname3, aname3)), "s.csv")},
+       content_type="multipart/form-data")
+post_json(f"/api/match/{imid}/complete")
+r = c.post(f"/match/{imid}/import",
+           data={"csv": (io.BytesIO(csv_named(sample, hname3, aname3)), "s.csv")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"reopen it before importing" in r.data, "completed match blocks import")
+c.post(f"/season/{sid3}/delete")
+
 # --- branding ---
 import io
 # viewer & scorekeeper can't touch branding

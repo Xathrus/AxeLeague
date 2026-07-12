@@ -1,9 +1,29 @@
 {% extends "base.html" %}
 {% block title %}{{ home_name }} vs {{ away_name }}{% endblock %}
 {% block content %}
+{% if request.args.get('m') %}<div class="flash-ok">{{ request.args.get('m') }}</div>{% endif %}
+{% if request.args.get('e') %}<div class="form-error">{{ request.args.get('e') }}</div>{% endif %}
 <div id="sk-root" class="sk-root">
   <div class="muted">Loading match…</div>
 </div>
 <script>window.MATCH_ID = {{ match.id }}; window.CAN_SCORE = {{ "true" if can_score else "false" }};</script>
 <script src="{{ url_for('static', filename='scorekeeper.js') }}"></script>
+
+{% if can_edit %}
+<details class="import-box">
+  <summary>Import scores from CSV (admin)</summary>
+  <p class="muted-small">Columns: <code>Game, Set, Thrower, Team, Throw 1 … Throw 10</code>.
+  One row per thrower per set; Team must be <strong>{{ home_name }}</strong> or <strong>{{ away_name }}</strong>.
+  Throw values: <code>1–5</code>, <code>6</code> = bullseye, <code>8</code> = killshot hit,
+  or <code>Miss</code>, <code>Drop</code>, <code>Kill Miss</code>, <code>Kill Drop</code>.
+  Throwers not on the roster are added automatically.
+  <strong>Importing replaces every score already on this match.</strong></p>
+  <form method="post" action="{{ url_for('import_match_csv', match_id=match.id) }}"
+        enctype="multipart/form-data" class="inline-form"
+        onsubmit="return confirm('Import this file? All scores currently on this match will be replaced.');">
+    <input type="file" name="csv" accept=".csv,text/csv" required>
+    <button type="submit">Import</button>
+  </form>
+</details>
+{% endif %}
 {% endblock %}

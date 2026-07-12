@@ -351,3 +351,10 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .ov-tied { font-size: 11px; color: var(--gold); letter-spacing: .05em;
   text-transform: uppercase; margin-top: 3px; }
 .ov-sub.muted { color: var(--ink-dim); }
+
+/* CSV import box on the match page */
+.import-box { margin-top: 28px; border: 1px dashed var(--line); border-radius: 10px;
+  padding: 10px 14px; }
+.import-box summary { cursor: pointer; color: var(--ink-dim); font-size: 14px; }
+.import-box[open] summary { color: var(--gold); margin-bottom: 6px; }
+.import-box code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
