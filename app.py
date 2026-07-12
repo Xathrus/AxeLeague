@@ -269,6 +269,48 @@ def reset_schedule(season_id):
     return redirect(url_for("schedule_page", season_id=season_id))
 
 
+@app.post("/season/<int:season_id>/teams/copy")
+@admin_required
+def copy_teams(season_id):
+    _season_or_404(season_id)
+    db = get_db()
+    try:
+        src_id = int(request.form.get("source_season_id", ""))
+    except ValueError:
+        abort(400)
+    src_season = db.execute("SELECT * FROM seasons WHERE id=?",
+                            (src_id,)).fetchone()
+    if not src_season or src_id == season_id:
+        abort(400)
+    existing = {r["name"].lower() for r in db.execute(
+        "SELECT name FROM teams WHERE season_id=?", (season_id,)).fetchall()}
+    src_teams = db.execute(
+        "SELECT * FROM teams WHERE season_id=? ORDER BY name",
+        (src_id,)).fetchall()
+    copied_teams = copied_players = skipped = 0
+    for t in src_teams:
+        if t["name"].lower() in existing:
+            skipped += 1
+            continue
+        cur = db.execute("INSERT INTO teams (season_id, name) VALUES (?, ?)",
+                         (season_id, t["name"]))
+        new_tid = cur.lastrowid
+        copied_teams += 1
+        for p in db.execute("SELECT name FROM players WHERE team_id=?"
+                            " ORDER BY name", (t["id"],)).fetchall():
+            db.execute("INSERT INTO players (team_id, name) VALUES (?, ?)",
+                       (new_tid, p["name"]))
+            copied_players += 1
+    db.commit()
+    msg = (f"Copied {copied_teams} team{'s' if copied_teams != 1 else ''} "
+           f"and {copied_players} player{'s' if copied_players != 1 else ''} "
+           f"from {src_season['name']}.")
+    if skipped:
+        msg += (f" Skipped {skipped} team{'s' if skipped != 1 else ''} "
+                "already in this season.")
+    return redirect(url_for("teams_page", season_id=season_id, m=msg))
+
+
 @app.post("/player/<int:player_id>/rename")
 @admin_required
 def rename_player(player_id):
@@ -319,8 +361,16 @@ def teams_page(season_id):
         by_team.setdefault(p["team_id"], []).append(p)
     scheduled = db.execute("SELECT COUNT(*) c FROM matches WHERE season_id=?",
                            (season_id,)).fetchone()["c"] > 0
+    other_seasons = db.execute(
+        """SELECT s.id, s.name, COUNT(t.id) AS n_teams
+           FROM seasons s JOIN teams t ON t.season_id=s.id
+           WHERE s.id != ? GROUP BY s.id ORDER BY s.id DESC""",
+        (season_id,)).fetchall()
     return render_template("teams.html", season=s, teams=teams,
-                           by_team=by_team, scheduled=scheduled)
+                           by_team=by_team, scheduled=scheduled,
+                           other_seasons=other_seasons,
+                           message=request.args.get("m"),
+                           error=request.args.get("e"))
 
 
 @app.post("/season/<int:season_id>/teams")

@@ -494,6 +494,43 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- copy teams from another season ---
+c.post("/seasons", data={"name": "Next Season"})
+sidN = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+# pre-add one clashing team to prove skipping works
+c.post(f"/season/{sidN}/teams", data={"name": "alpha"})  # case-insensitive clash
+# viewer can't copy
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+r = c.post(f"/season/{sidN}/teams/copy", data={"source_season_id": season_id})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "viewer cannot copy teams")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+r = c.post(f"/season/{sidN}/teams/copy", data={"source_season_id": season_id},
+           follow_redirects=True)
+ok(b"Copied 4 teams" in r.data, "copied the 4 non-clashing teams")
+ok(b"Skipped 1 team" in r.data, "clashing team skipped, not duplicated")
+ntN = q("SELECT COUNT(*) n FROM teams WHERE season_id=?", sidN)[0]["n"]
+ok(ntN == 5, f"target season has 5 teams (got {ntN})")
+# rosters came along (source had 13 players; Alpha's 3 stay behind w/ the clash)
+npN = q("SELECT COUNT(*) n FROM players p JOIN teams t ON p.team_id=t.id"
+        " WHERE t.season_id=?", sidN)[0]["n"]
+ok(npN == 10, f"rosters copied with their teams (got {npN})")
+# renamed player from earlier ('A1 Renamed') came across with Alpha? no — Alpha
+# was skipped; check a Bravo player copied by name
+bnames = {r["name"] for r in q(
+    "SELECT p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=? AND t.name='Bravo'", sidN)}
+ok(bnames == {"B1", "B2", "B3"}, f"Bravo roster copied intact (got {bnames})")
+# re-run: everything skipped
+r = c.post(f"/season/{sidN}/teams/copy", data={"source_season_id": season_id},
+           follow_redirects=True)
+ok(b"Copied 0 teams" in r.data and b"Skipped 5" in r.data,
+   "second copy run skips everything")
+ok(c.post(f"/season/{sidN}/teams/copy",
+          data={"source_season_id": sidN}).status_code == 400,
+   "copying a season into itself rejected")
+c.post(f"/season/{sidN}/delete")
+
 # --- CSV import (uses the real sample file) ---
 import io
 sample = open("SampleMatch.csv", "rb").read()

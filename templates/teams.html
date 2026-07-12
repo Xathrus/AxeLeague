@@ -4,11 +4,26 @@
 {% with active='teams' %}{% include "_season_nav.html" %}{% endwith %}
 <h1 class="page-title">Teams &amp; Rosters <span class="muted-small">{{ season.name }}</span></h1>
 
+{% if message %}<div class="flash-ok">{{ message }}</div>{% endif %}
+{% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+
 {% if can_edit %}
 <form method="post" action="{{ url_for('add_team', season_id=season.id) }}" class="inline-form">
   <input name="name" placeholder="New team name" required>
   <button type="submit">Add team</button>
 </form>
+{% if other_seasons %}
+<form method="post" action="{{ url_for('copy_teams', season_id=season.id) }}" class="inline-form">
+  <select name="source_season_id" required>
+    <option value="" disabled selected>Copy teams from…</option>
+    {% for os in other_seasons %}
+    <option value="{{ os.id }}">{{ os.name }} ({{ os.n_teams }} teams)</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Copy teams &amp; rosters</button>
+</form>
+<p class="muted-small">Copies every team and its roster from the chosen season. Teams whose name already exists here are skipped, so it's safe to run more than once.</p>
+{% endif %}
 {% if scheduled %}
 <p class="muted-small">A schedule exists for this season — teams can be renamed but not deleted. To include new teams, reset the schedule from the Schedule page, then regenerate it.</p>
 {% endif %}

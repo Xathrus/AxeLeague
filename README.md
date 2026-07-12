@@ -10,7 +10,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
   Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
   matches only; "View Games & Stats" needs no password and is read-only
 - **Seasons, teams, rosters** — create/rename/delete seasons, add teams and
-  players, rename players anytime; reset the schedule to bring new teams in
+  players (or copy all teams and rosters from a previous season in one click), rename players anytime; reset the schedule to bring new teams in
 - **Double round robin scheduler** — every team plays every other team twice, played one round at a time (Round 1, Round 2, …)
 - **Schedule control** — admin can move any match to any round (including a brand-new round) and set a date for each round; the schedule shows rounds grouped under their dates for everyone
 - **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it
