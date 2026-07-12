@@ -414,7 +414,10 @@ ok(names == sorted(names), "tied holders listed alphabetically")
 r2 = c.get(f"/season/{season_id}/stats")
 ok(b"-way tie" in r2.data, "tie annotation rendered on stats page")
 ok(b"Weekly High Scores" in r.data, "stats page shows Weekly High Scores")
-ok(b"Current high score" in r.data, "overview shows current high score card")
+ok(b"Highest average" in r.data, "overview shows Highest Average card")
+ok(b"Current high score" not in r.data, "Current high score card removed")
+ok(ov["best_avg"] and ov["best_avg"]["value"] > 0 and ov["best_avg"]["holders"],
+   f"highest average computed with holder(s) (got {ov['best_avg']})")
 
 # rename player
 some_pid = pid["A1"]

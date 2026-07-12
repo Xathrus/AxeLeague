@@ -265,13 +265,16 @@ def league_overview(db, season_id):
                           if r["total"] == hi_total])
 
     # per-player aggregates for the leader boards
-    agg = defaultdict(lambda: {"bulls": 0, "non_ks": 0, "ks_att": 0, "ks_hit": 0})
+    agg = defaultdict(lambda: {"bulls": 0, "non_ks": 0, "ks_att": 0,
+                               "ks_hit": 0, "total": 0, "sets": 0})
     for r in rows:
         a = agg[r["player_id"]]
         a["bulls"] += r["bulls"]
         a["non_ks"] += r["n_throws"] - r["ks_att"]
         a["ks_att"] += r["ks_att"]
         a["ks_hit"] += r["ks_hit"]
+        a["total"] += r["total"]
+        a["sets"] += 1
 
     def leader(pool, value):
         items = [(pid, value(a)) for pid, a in pool if value(a) is not None]
@@ -284,6 +287,11 @@ def league_overview(db, season_id):
     bull_pool = [(pid, a) for pid, a in agg.items() if a["non_ks"] >= MIN_NON_KS]
     if not bull_pool:
         bull_pool = list(agg.items())
+    # average leader needs the same body of work (~3 full sets)
+    avg_pool = [(pid, a) for pid, a in agg.items()
+                if a["sets"] * 10 >= MIN_NON_KS + a["ks_att"]]
+    if not avg_pool:
+        avg_pool = list(agg.items())
     ks_pool = [(pid, a) for pid, a in agg.items() if a["ks_att"] >= MIN_KS_ATT]
     if not ks_pool:
         ks_pool = [(pid, a) for pid, a in agg.items() if a["ks_att"] > 0]
@@ -293,6 +301,9 @@ def league_overview(db, season_id):
         "drop_pct": (100.0 * drops / n_throws) if n_throws else None,
         "bull_pct": (100.0 * bulls / non_ks) if non_ks else None,
         "high_score": {"value": hi_total, "holders": hi_holders},
+        "best_avg": leader(
+            avg_pool,
+            lambda a: (a["total"] / a["sets"]) if a["sets"] else None),
         "best_bull_pct": leader(
             bull_pool,
             lambda a: (100.0 * a["bulls"] / a["non_ks"]) if a["non_ks"] else None),

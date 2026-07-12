@@ -89,14 +89,14 @@
     <div class="ov-value">{{ overview.high_score.value }}</div>
     {{ holder_lines(overview.high_score) }}
   </div>
-  {% if weekly_highs %}
   <div class="ov-card">
-    <div class="ov-label">Current high score</div>
-    <div class="ov-value">{{ weekly_highs[-1].value }}</div>
-    {{ holder_lines(weekly_highs[-1]) }}
-    <div class="ov-sub muted">{{ weekly_highs[-1].label }}</div>
+    <div class="ov-label">Highest average</div>
+    {% if overview.best_avg %}
+    <div class="ov-value">{{ '%.1f'|format(overview.best_avg.value) }}</div>
+    {{ holder_lines(overview.best_avg) }}
+    <div class="ov-sub muted">per set</div>
+    {% else %}<div class="ov-value">—</div>{% endif %}
   </div>
-  {% endif %}
   <div class="ov-card">
     <div class="ov-label">Best bullseye %</div>
     {% if overview.best_bull_pct %}
@@ -119,7 +119,7 @@
     {% else %}<div class="ov-value">—</div>{% endif %}
   </div>
 </div>
-<p class="muted-small">Bullseye percentages exclude killshot attempts (a killshot can't score a bullseye). Percentage leaders need {{ overview.min_non_ks }}+ non-killshot throws ({{ overview.min_ks_att }}+ killshot attempts for killshot %); until someone qualifies, all players are considered.</p>
+<p class="muted-small">Bullseye percentages exclude killshot attempts (a killshot can't score a bullseye). Average and percentage leaders need {{ overview.min_non_ks }}+ non-killshot throws ({{ overview.min_ks_att }}+ killshot attempts for killshot %); until someone qualifies, all players are considered.</p>
 {% endif %}
 
 {% if has_playoff_data %}
