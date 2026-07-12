@@ -800,6 +800,33 @@ def api_projector():
     return jsonify({"boards": boards, "standings": standings})
 
 
+@app.post("/match/<int:match_id>/reset")
+@admin_required
+def reset_match(match_id):
+    db = get_db()
+    m = db.execute("SELECT * FROM matches WHERE id=?", (match_id,)).fetchone()
+    if not m:
+        abort(404)
+    if m["completed"] and m["stage"] == "playoff":
+        return redirect(url_for(
+            "match_page", match_id=match_id,
+            e="This playoff match already advanced the bracket — use "
+              "Reset playoffs on the Playoffs page instead."))
+    set_ids = [r["id"] for r in db.execute(
+        """SELECT s.id FROM sets s JOIN games g ON g.id=s.game_id
+           WHERE g.match_id=?""", (match_id,)).fetchall()]
+    qmarks = ",".join("?" * len(set_ids))
+    db.execute(f"DELETE FROM throws WHERE set_id IN ({qmarks})", set_ids)
+    db.execute(f"UPDATE sets SET home_player_id=NULL, away_player_id=NULL"
+               f" WHERE id IN ({qmarks})", set_ids)
+    db.execute("""UPDATE matches SET completed=0, winner_team_id=NULL,
+                  sudden_death_winner_team_id=NULL WHERE id=?""", (match_id,))
+    db.commit()
+    return redirect(url_for("match_page", match_id=match_id,
+                            m="Match reset — all scores and thrower "
+                              "assignments cleared."))
+
+
 @app.route("/match/<int:match_id>")
 def match_page(match_id):
     m = _match_or_404(match_id)
@@ -837,19 +864,24 @@ def api_assign(set_id):
                             ("away_player_id", "away_team_id")):
         if field in data:
             pid = data[field]
-            # block changing a player who already has throws in this set
             current = s[field]
-            if current and pid != current:
-                n = db.execute(
-                    "SELECT COUNT(*) c FROM throws WHERE set_id=? AND player_id=?",
-                    (set_id, current)).fetchone()["c"]
-                if n:
-                    return _err("That thrower already has throws in this set. "
-                                "Use edit mode to correct throws instead.")
             if pid is not None:
                 p = db.execute("SELECT * FROM players WHERE id=?", (pid,)).fetchone()
                 if not p or p["team_id"] != m[team_col]:
                     return _err("Player is not on that team's roster.")
+            if current and pid != current:
+                if pid is None:
+                    n = db.execute(
+                        "SELECT COUNT(*) c FROM throws WHERE set_id=?"
+                        " AND player_id=?", (set_id, current)).fetchone()["c"]
+                    if n:
+                        return _err("This thrower has throws in the set — "
+                                    "pick a replacement instead of unassigning.")
+                else:
+                    # re-credit the slot's existing throws to the new thrower
+                    db.execute(
+                        "UPDATE throws SET player_id=? WHERE set_id=?"
+                        " AND player_id=?", (pid, set_id, current))
             db.execute(f"UPDATE sets SET {field}=? WHERE id=?", (pid, set_id))
     db.commit()
     return jsonify({"ok": True})

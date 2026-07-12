@@ -259,10 +259,37 @@
 
     const nameRow = el("div", "sk-player-row");
     nameRow.appendChild(el("div", "sk-player-name", pname));
-    if (throws.length === 0 && !locked) {
+    if (!locked) {
       const change = el("button", "ghost tiny", "change");
+      change.title = throws.length
+        ? "Swap thrower — recorded throws move to the new thrower"
+        : "Change thrower";
       change.onclick = () => {
-        api(`/api/set/${s.id}/assign`, { [side + "_player_id"]: null });
+        if (throws.length === 0) {
+          // nothing recorded yet: just unassign back to the picker
+          api(`/api/set/${s.id}/assign`, { [side + "_player_id"]: null });
+          return;
+        }
+        // throws exist: swap in place via a dropdown
+        const sel = el("select", "player-select");
+        sel.appendChild(new Option("Move these throws to…", ""));
+        state.rosters[side].forEach(pl => {
+          if (pl.id !== pid) sel.appendChild(new Option(pl.name, pl.id));
+        });
+        const cancel = el("button", "ghost tiny", "cancel");
+        cancel.onclick = () => render();
+        sel.onchange = () => {
+          if (sel.value &&
+              confirm(`Re-credit this set's ${throws.length} recorded ` +
+                      `throw(s) from ${pname} to the selected thrower?`)) {
+            api(`/api/set/${s.id}/assign`, { [side + "_player_id"]: +sel.value });
+          } else {
+            render();
+          }
+        };
+        nameRow.replaceChild(sel, nameRow.firstChild);
+        nameRow.insertBefore(cancel, nameRow.children[1]);
+        change.remove();
       };
       nameRow.appendChild(change);
     }

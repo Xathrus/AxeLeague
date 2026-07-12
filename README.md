@@ -14,7 +14,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
   players (or copy all teams and rosters from a previous season in one click), rename players anytime; reset the schedule to bring new teams in
 - **Double round robin scheduler** — every team plays every other team twice, played one round at a time (Round 1, Round 2, …)
 - **Schedule control** — admin can move any match to any round (including a brand-new round) and set a date for each round; the schedule shows rounds grouped under their dates for everyone
-- **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it
+- **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it; swap a thrower mid-set (recorded throws re-credit to the new thrower); admin can reset a whole match
 - **Full rules engine** — 3 sets per game, 3 games per match, first to 2 game wins; ties handled per league rules; sudden death with manual winner selection; lane swap divider at throw 5
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Projector mode** — a big-type display page for a venue screen showing up to three matches at once, automatically featuring the three with the most recent scoring: match score, per-game totals, and the live set with throw-by-throw chips, refreshing every 3 seconds, with current standings for the season being played shown underneath

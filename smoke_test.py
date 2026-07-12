@@ -510,6 +510,84 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- reassign thrower with throws recorded; admin match reset ---
+c.post("/seasons", data={"name": "Swap Season"})
+sidS = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("S-A", "S-B"):
+    c.post(f"/season/{sidS}/teams", data={"name": t})
+tidS = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidS)}
+for nm, tm in (("SA1", "S-A"), ("SA2", "S-A"), ("SB1", "S-B")):
+    c.post(f"/team/{tidS[tm]}/players", data={"name": nm})
+pidS = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidS)}
+c.post(f"/season/{sidS}/schedule/generate")
+smid = q("SELECT id FROM matches WHERE season_id=? LIMIT 1", sidS)[0]["id"]
+sst = state(smid)
+home_is_A = sst["match"]["home_team_id"] == tidS["S-A"]
+ss0 = sets_of(smid)[0]["id"]
+a_side_pid = pidS["SA1"] if home_is_A else pidS["SB1"]
+b_side_pid = pidS["SB1"] if home_is_A else pidS["SA1"]
+assign(ss0, a_side_pid, b_side_pid)
+for o in ("5", "B", "KH"):
+    throw(ss0, pidS["SA1"] if home_is_A else pidS["SB1"], o)
+# swap the S-A thrower (has 3 throws incl. a killshot) to SA2
+fldA = "home_player_id" if home_is_A else "away_player_id"
+r = post_json(f"/api/set/{ss0}/assign", {fldA: pidS["SA2"]})
+ok(r.status_code == 200, "thrower swapped despite recorded throws")
+sd = state(smid)["games"][0]["sets"][0]
+keyA = "home" if home_is_A else "away"
+ok(sd[keyA + "_player_id"] == pidS["SA2"], "set now assigned to the new thrower")
+ok(len(sd[keyA + "_throws"]) == 3 and sd[keyA + "_total"] == 19,
+   "existing throws moved with the slot (5+6+8=19)")
+own = q("SELECT COUNT(*) n FROM throws WHERE set_id=? AND player_id=?",
+        ss0, pidS["SA2"])[0]["n"]
+old = q("SELECT COUNT(*) n FROM throws WHERE set_id=? AND player_id=?",
+        ss0, pidS["SA1"])[0]["n"]
+ok(own == 3 and old == 0, "throws re-credited in the database")
+# cross-team assignment still rejected
+r = post_json(f"/api/set/{ss0}/assign", {fldA: pidS["SB1"]})
+ok(r.status_code == 400, "swap to a player from the other team rejected")
+# unassigning a thrower with throws is still blocked
+r = post_json(f"/api/set/{ss0}/assign", {fldA: None})
+ok(r.status_code == 400, "unassign blocked while throws exist")
+
+# admin reset: scorekeeper denied, admin wipes the match
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = c.post(f"/match/{smid}/reset")
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "scorekeeper cannot reset a match")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+ok(b"Reset match" in c.get(f"/match/{smid}").data,
+   "admin sees the reset button")
+r = c.post(f"/match/{smid}/reset", follow_redirects=True)
+ok(b"Match reset" in r.data, "match reset succeeds with confirmation message")
+nth = q("""SELECT COUNT(*) n FROM throws t JOIN sets s ON s.id=t.set_id
+           JOIN games g ON g.id=s.game_id WHERE g.match_id=?""", smid)[0]["n"]
+nassigned = q("""SELECT COUNT(*) n FROM sets s JOIN games g ON g.id=s.game_id
+                 WHERE g.match_id=? AND (s.home_player_id IS NOT NULL
+                 OR s.away_player_id IS NOT NULL)""", smid)[0]["n"]
+ok(nth == 0 and nassigned == 0, "reset cleared throws and assignments")
+ok(state(smid)["status"]["state"] == "in_progress", "reset match back to unplayed")
+# a completed regular match can be reset too
+hp2 = pidS["SA1"] if home_is_A else pidS["SB1"]
+ap2 = pidS["SB1"] if home_is_A else pidS["SA1"]
+for gi in (0, 1):
+    for si in range(3):
+        sx = sets_of(smid)[gi*3+si]["id"]
+        assign(sx, hp2, ap2)
+        fill(sx, hp2, ap2, ["1"]*10 if si == 0 else ["M"]*10, ["M"]*10)
+post_json(f"/api/match/{smid}/complete")
+r = c.post(f"/match/{smid}/reset", follow_redirects=True)
+ok(b"Match reset" in r.data and state(smid)["status"]["state"] == "in_progress",
+   "completed regular match reset to unplayed")
+c.post(f"/season/{sidS}/delete")
+
+# completed playoff matches refuse reset (bracket already advanced)
+r = c.post(f"/match/{pm}/reset", follow_redirects=True)
+ok(b"Reset playoffs" in r.data, "completed playoff match points to Reset playoffs")
+
 # --- projector ---
 c.post("/seasons", data={"name": "Proj Season"})
 sidP = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

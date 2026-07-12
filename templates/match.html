@@ -10,6 +10,13 @@
 <script src="{{ url_for('static', filename='scorekeeper.js') }}"></script>
 
 {% if can_edit %}
+<div class="danger-zone">
+  <form method="post" action="{{ url_for('reset_match', match_id=match.id) }}"
+        onsubmit="return confirm('Reset this match? Every recorded throw and all thrower assignments will be permanently deleted, and the match returns to unplayed. This cannot be undone.');">
+    <button type="submit" class="ghost danger">Reset match…</button>
+  </form>
+</div>
+
 <details class="import-box">
   <summary>Import scores from CSV (admin)</summary>
   <p class="muted-small">Columns: <code>Game, Set, Thrower, Team, Throw 1 … Throw 10</code>.
