@@ -378,6 +378,28 @@ r = c.get(f"/season/{season_id}/stats")
 ok(b"League Overview" in r.data, "stats page shows League Overview")
 ok(b"Drop %" in r.data, "player table shows Drop %% column")
 
+# overview excludes playoffs: avg must equal the regular-season set average
+exp_avg = q("""SELECT AVG(t2.tot) a FROM (
+    SELECT SUM(t.points) tot FROM throws t
+    JOIN sets s ON s.id=t.set_id JOIN games g ON g.id=s.game_id
+    JOIN matches m ON m.id=g.match_id
+    WHERE m.season_id=? AND m.stage='regular'
+    GROUP BY t.player_id, s.id) t2""", season_id)[0]["a"]
+ok(abs(ov["avg_score"] - exp_avg) < 1e-9,
+   "league overview uses regular-season data only")
+
+# weekly high scores match weekly-average grouping; season high 60 present
+with app.app_context():
+    whs = statsmod.weekly_high_scores(db.get_db(), season_id)
+    cols0, _ = statsmod.player_weekly_averages(db.get_db(), season_id)
+ok(len(whs) == len(cols0), "weekly highs have one card per weekly-average column")
+ok([w["label"] for w in whs] == [cc["label"] for cc in cols0],
+   "weekly high labels match weekly columns")
+ok(any(w["value"] == 60 for w in whs), "the 60-point set tops its week")
+ok(all(w["name"] and w["team"] for w in whs), "every weekly high has a holder")
+ok(b"Weekly High Scores" in r.data, "stats page shows Weekly High Scores")
+ok(b"Current high score" in r.data, "overview shows current high score card")
+
 # rename player
 some_pid = pid["A1"]
 r = c.post(f"/player/{some_pid}/rename", data={"name": "A1 Renamed"})

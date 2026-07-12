@@ -220,7 +220,7 @@ def standings(db, season_id):
 
 
 def league_overview(db, season_id):
-    """Season-to-date league summary across regular season AND playoffs.
+    """Season-to-date league summary — regular season only.
 
     Bullseye percentages exclude killshot attempts from the denominator,
     since a killshot attempt can never score a bullseye. Percentage-based
@@ -231,7 +231,7 @@ def league_overview(db, season_id):
     MIN_NON_KS = 30
     MIN_KS_ATT = 5
 
-    rows = _player_set_rows(db, season_id)
+    rows = _player_set_rows(db, season_id, stage="regular")
     if not rows:
         return None
     players = {p["id"]: p for p in _players(db, season_id)}
@@ -289,3 +289,42 @@ def league_overview(db, season_id):
         "min_non_ks": MIN_NON_KS,
         "min_ks_att": MIN_KS_ATT,
     }
+
+
+def weekly_high_scores(db, season_id):
+    """High set score and holder per week (rounds grouped by their date,
+    same grouping as the Weekly Average table). Returns a list of
+    {key, label, value, name, team} in round order."""
+    rows = _player_set_rows(db, season_id, stage="regular")
+    dates = round_dates(db, season_id)
+    players = {p["id"]: p for p in _players(db, season_id)}
+
+    def col_key(week):
+        return ("d", dates[week]) if week in dates else ("r", week)
+
+    first_round = {}
+    for w in sorted({r["week"] for r in rows if r["week"] is not None}):
+        first_round.setdefault(col_key(w), w)
+
+    best = {}
+    for r in rows:
+        if r["week"] is None:
+            continue
+        k = col_key(r["week"])
+        if k not in best or r["total"] > best[k]["total"]:
+            best[k] = r
+
+    out = []
+    for k, _ in sorted(first_round.items(), key=lambda kv: kv[1]):
+        r = best.get(k)
+        if not r:
+            continue
+        p = players.get(r["player_id"])
+        out.append({
+            "key": k,
+            "label": _date_label(k[1]) if k[0] == "d" else f"Rd {k[1]}",
+            "value": r["total"],
+            "name": p["name"] if p else "?",
+            "team": p["team_name"] if p else "?",
+        })
+    return out
