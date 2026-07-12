@@ -2,11 +2,17 @@
 {% block content %}
 <h1 class="page-title">Seasons</h1>
 
+{% if request.args.get('e') %}<div class="form-error">{{ request.args.get('e') }}</div>{% endif %}
 {% if can_edit %}
 <form method="post" action="{{ url_for('create_season') }}" class="inline-form">
   <input name="name" placeholder="New season name (e.g. Spring 2026)" required>
   <button type="submit">Create season</button>
 </form>
+<form method="post" action="{{ url_for('import_season') }}" enctype="multipart/form-data" class="inline-form">
+  <input type="file" name="file" accept=".json,application/json" required>
+  <button type="submit">Import season</button>
+</form>
+<p class="muted-small">Import a season file exported from this or another installation — teams, rosters, schedule, playoffs, and every recorded throw come across as a new season.</p>
 {% endif %}
 
 {% if seasons %}

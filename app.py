@@ -7,6 +7,7 @@ import auth
 import bracket as bracket_mod
 import branding as branding_mod
 import csv_import
+import season_io
 import scoring
 import stats as stats_mod
 from auth import admin_required, scorekeeper_required
@@ -232,6 +233,39 @@ def create_season():
         db.execute("INSERT INTO seasons (name) VALUES (?)", (name,))
         db.commit()
     return redirect(url_for("index"))
+
+
+@app.route("/season/<int:season_id>/export")
+@admin_required
+def export_season(season_id):
+    s = _season_or_404(season_id)
+    import re as _re
+    data = season_io.export_season(get_db(), season_id)
+    from flask import Response
+    import json as _json
+    fname = _re.sub(r"[^A-Za-z0-9._-]+", "_", s["name"]).strip("_") or "season"
+    return Response(
+        _json.dumps(data, indent=1),
+        mimetype="application/json",
+        headers={"Content-Disposition":
+                 f"attachment; filename=axeleague-{fname}.json"})
+
+
+@app.post("/seasons/import")
+@admin_required
+def import_season():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return redirect(url_for("index", e="Choose a season file first."))
+    db = get_db()
+    try:
+        data = season_io.loads(f.read())
+        sid = season_io.import_season(db, data)
+    except season_io.SeasonImportError as e:
+        db.rollback()
+        return redirect(url_for("index", e=str(e)))
+    db.commit()
+    return redirect(url_for("season_home", season_id=sid))
 
 
 @app.post("/season/<int:season_id>/rename")
@@ -749,7 +783,21 @@ def api_projector():
                 "away_throws": [t["outcome"] for t in cs["away_throws"]],
             },
         })
-    return jsonify({"boards": boards})
+    standings = None
+    if boards:
+        lead_season = db.execute(
+            "SELECT * FROM seasons WHERE id=?",
+            (db.execute("SELECT season_id FROM matches WHERE id=?",
+                        (boards[0]["match_id"],)).fetchone()["season_id"],)
+        ).fetchone()
+        rows_ = stats_mod.standings(db, lead_season["id"])
+        standings = {
+            "season": lead_season["name"],
+            "rows": [{"team": r["name"], "wins": r["wins"],
+                      "losses": r["losses"], "bulls": r["bulls"]}
+                     for r in rows_],
+        }
+    return jsonify({"boards": boards, "standings": standings})
 
 
 @app.route("/match/<int:match_id>")

@@ -16,7 +16,7 @@
         Scorekeeper
         <span class="muted-small">Score and edit matches</span>
       </button>
-      <button type="submit" class="role-btn" id="viewer-btn">
+      <button type="button" class="role-btn" id="viewer-btn">
         View Games &amp; Stats
         <span class="muted-small">No password needed</span>
       </button>
@@ -49,6 +49,15 @@
   document.getElementById("viewer-btn").addEventListener("click", () => {
     roleInput.value = "viewer";
     pwInput.required = false;
+    form.submit();
+  });
+
+  // Pressing Return only submits once a role is chosen (with its password
+  // field ready); it must never fall through to a viewer login.
+  form.addEventListener("submit", (e) => {
+    if (!roleInput.value) {
+      e.preventDefault();
+    }
   });
 </script>
 {% endblock %}

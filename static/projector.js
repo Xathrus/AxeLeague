@@ -72,6 +72,24 @@
     return card;
   }
 
+  function standingsCard(st) {
+    const card = el("div", "proj-standings");
+    card.appendChild(el("div", "proj-current-label",
+      "STANDINGS · " + st.season.toUpperCase()));
+    const grid = el("div", "proj-standings-grid");
+    st.rows.forEach((r, i) => {
+      const line = el("div", "proj-standing");
+      line.appendChild(el("span", "proj-rank", String(i + 1)));
+      line.appendChild(el("span", "proj-standing-team", r.team));
+      line.appendChild(el("span", "proj-standing-rec",
+        `${r.wins}–${r.losses}`));
+      line.appendChild(el("span", "proj-standing-bulls", `${r.bulls} 🎯`));
+      grid.appendChild(line);
+    });
+    card.appendChild(grid);
+    return card;
+  }
+
   async function refresh() {
     try {
       const r = await fetch("/api/projector");
@@ -86,6 +104,9 @@
       }
       root.className = "proj-root cols-" + data.boards.length;
       data.boards.forEach(b => root.appendChild(board(b)));
+      if (data.standings && data.standings.rows.length) {
+        root.appendChild(standingsCard(data.standings));
+      }
     } catch (e) { /* keep last good frame */ }
   }
 

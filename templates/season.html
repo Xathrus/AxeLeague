@@ -36,6 +36,7 @@
     <input name="name" value="{{ season.name }}" required>
     <button type="submit">Rename season</button>
   </form>
+  <a class="ghost" style="display:inline-block;margin:8px 0" href="{{ url_for('export_season', season_id=season.id) }}">Export season to file</a>
   <form method="post" action="{{ url_for('delete_season', season_id=season.id) }}" class="inline"
         onsubmit="return confirm('Delete this entire season? Teams, players, schedule, scores, and playoffs will all be permanently removed.');">
     <button type="submit" class="ghost danger">Delete season…</button>

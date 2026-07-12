@@ -407,3 +407,19 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .proj-chip.empty { opacity: .35; }
 .proj-sd { font-size: 22px; font-weight: 800; letter-spacing: .1em;
   color: var(--red); border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* projector standings */
+.proj-standings { grid-column: 1 / -1; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 14px; padding: 16px 20px; }
+.proj-standings-grid { display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 6px 28px; margin-top: 8px; }
+.proj-standing { display: grid; grid-template-columns: 24px minmax(0,1fr) auto auto;
+  gap: 10px; align-items: baseline; font-size: 17px; }
+.proj-rank { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.proj-standing-team { white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-weight: 700; }
+.proj-standing-rec { font-variant-numeric: tabular-nums; color: var(--gold);
+  font-weight: 800; }
+.proj-standing-bulls { font-size: 13px; color: var(--ink-dim);
+  font-variant-numeric: tabular-nums; }

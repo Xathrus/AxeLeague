@@ -9,6 +9,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Logins & roles** — on first start the app prompts you to create Admin and
   Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
   matches only; "View Games & Stats" needs no password and is read-only
+- **Season export / import** — download any season as a portable JSON file and import it into this or another installation (teams, rosters, schedule, bracket wiring, and every throw come across)
 - **Seasons, teams, rosters** — create/rename/delete seasons, add teams and
   players (or copy all teams and rosters from a previous season in one click), rename players anytime; reset the schedule to bring new teams in
 - **Double round robin scheduler** — every team plays every other team twice, played one round at a time (Round 1, Round 2, …)
@@ -16,7 +17,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Live scorekeeper** — side-by-side players, 10-cell color-coded throw grid, buttons for 1–5, bullseye (6), killshot (8), drop, miss, undo; tap any throw to edit it
 - **Full rules engine** — 3 sets per game, 3 games per match, first to 2 game wins; ties handled per league rules; sudden death with manual winner selection; lane swap divider at throw 5
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
-- **Projector mode** — a big-type display page for a venue screen showing up to three matches at once, automatically featuring the three with the most recent scoring: match score, per-game totals, and the live set with throw-by-throw chips, refreshing every 3 seconds
+- **Projector mode** — a big-type display page for a venue screen showing up to three matches at once, automatically featuring the three with the most recent scoring: match score, per-game totals, and the live set with throw-by-throw chips, refreshing every 3 seconds, with current standings for the season being played shown underneath
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **CSV score import** — admin can upload a CSV on any match page to import its scores in one shot (replaces anything already recorded). Columns: `Game, Set, Thrower, Team, Throw 1 … Throw 10`; values 1-5, 6 = bullseye, 8 = killshot hit, or Miss / Drop / Kill Miss / Kill Drop; unknown throwers are added to the roster automatically. See `SampleMatch.csv`
 - **Short rosters** — the same player may throw multiple sets in a game
@@ -40,6 +41,7 @@ static/           scorekeeper.js + style.css
 seed_demo.py      Optional: seed a demo season with 6 teams
 set_password.py   Reset the Admin or Scorekeeper password from the shell
 csv_import.py     CSV score import parser/validator
+season_io.py      Season export/import (portable JSON)
 SampleMatch.csv   Example import file
 smoke_test.py     End-to-end test of the whole rules engine
 deploy/           systemd unit + install script for the LXC

@@ -57,6 +57,14 @@ c.post("/logout")
 r = c.get("/", follow_redirects=False)
 ok("/login" in r.headers.get("Location", ""), "logged out -> login redirect")
 
+# login page: viewer button is not a submit (Enter-key bug fix)
+lp = c.get("/login").data
+import re as _re
+vbtn = _re.search(rb'<button[^>]*id="viewer-btn"[^>]*>', lp).group(0)
+ok(b'type="button"' in vbtn, "viewer button is type=button, not submit")
+ok(b"never fall through to a viewer login" in lp,
+   "empty-role submit guarded in login script")
+
 # viewer: read-only
 c.post("/login", data={"role": "viewer"})
 ok(c.get("/").status_code == 200, "viewer can view pages")
@@ -514,8 +522,9 @@ pmids = [r["id"] for r in q(
     "SELECT id FROM matches WHERE season_id=? ORDER BY id LIMIT 5", sidP)]
 
 r = c.get("/api/projector")
-ok(r.status_code == 200 and r.get_json()["boards"] == [],
-   "projector empty when no active scoring")
+ok(r.status_code == 200 and r.get_json()["boards"] == []
+   and r.get_json()["standings"] is None,
+   "projector empty (no boards, no standings) when nothing active")
 
 def start_scoring(mid, n_throws=3):
     stx = state(mid)
@@ -544,6 +553,12 @@ ok(b0["current"]["game"] == 1 and b0["current"]["set"] == 1,
 ok(b0["current"]["home_throws"] == ["3", "3", "3"]
    and b0["current"]["home_total"] == 9, "live throws and totals in payload")
 ok(b0["wins"] == {"home": 0, "away": 0}, "game wins present")
+stnds = data["standings"]
+ok(stnds and stnds["season"] == "Proj Season",
+   "projector includes standings for the season being scored")
+ok(len(stnds["rows"]) == 4 and all(
+   set(r) == {"team", "wins", "losses", "bulls"} for r in stnds["rows"]),
+   "standings rows carry team, record, and bullseyes")
 
 # fresh throw on an older match bumps it to the front
 hp0 = q("""SELECT s.home_player_id p FROM sets s JOIN games g ON g.id=s.game_id
@@ -876,5 +891,84 @@ ok(q("SELECT COUNT(*) n FROM seasons WHERE id=?", sid2)[0]["n"] == 0,
    "season deleted")
 ok(q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid2)[0]["n"] == 0,
    "season delete cascaded to matches")
+
+# --- season export / import round trip ---
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+r = c.get(f"/season/{season_id}/export")
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "viewer cannot export a season")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+
+r = c.get(f"/season/{season_id}/export")
+ok(r.status_code == 200 and r.mimetype == "application/json",
+   "season exports as JSON download")
+ok("attachment" in r.headers.get("Content-Disposition", ""),
+   "export served as a file attachment")
+export_bytes = r.data
+doc = json.loads(export_bytes)
+ok(doc["format"] == "axeleague-season" and doc["version"] == 1,
+   "export carries format and version")
+ok(len(doc["teams"]) == 5 and len(doc["matches"]) > 20,
+   "export includes teams and all matches (regular + playoffs)")
+
+n_seasons_before = q("SELECT COUNT(*) n FROM seasons")[0]["n"]
+r = c.post("/seasons/import",
+           data={"file": (io.BytesIO(export_bytes), "season.json")},
+           content_type="multipart/form-data")
+ok(r.status_code in (302, 303) and "/season/" in r.headers["Location"],
+   "import creates the season and lands on it")
+sid_new = int(r.headers["Location"].rstrip("/").split("/")[-1])
+ok(q("SELECT COUNT(*) n FROM seasons")[0]["n"] == n_seasons_before + 1,
+   "one new season created")
+
+def season_shape(sid_):
+    return {
+        "teams": q("SELECT COUNT(*) n FROM teams WHERE season_id=?", sid_)[0]["n"],
+        "players": q("SELECT COUNT(*) n FROM players p JOIN teams t"
+                     " ON p.team_id=t.id WHERE t.season_id=?", sid_)[0]["n"],
+        "matches": q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sid_)[0]["n"],
+        "completed": q("SELECT COUNT(*) n FROM matches WHERE season_id=?"
+                       " AND completed=1", sid_)[0]["n"],
+        "throws": q("""SELECT COUNT(*) n FROM throws t JOIN sets s ON s.id=t.set_id
+                       JOIN games g ON g.id=s.game_id JOIN matches m
+                       ON m.id=g.match_id WHERE m.season_id=?""", sid_)[0]["n"],
+        "dates": q("SELECT COUNT(*) n FROM round_dates WHERE season_id=?",
+                   sid_)[0]["n"],
+    }
+ok(season_shape(season_id) == season_shape(sid_new),
+   f"imported season matches the original shape ({season_shape(sid_new)})")
+
+# stats agree between original and copy
+with app.app_context():
+    d0 = db.get_db()
+    orig = {p["name"]: (p["avg"], p["bulls"], p["ks_att"])
+            for p in statsmod.player_season_stats(d0, season_id, stage="regular")}
+    copy = {p["name"]: (p["avg"], p["bulls"], p["ks_att"])
+            for p in statsmod.player_season_stats(d0, sid_new, stage="regular")}
+ok(orig == copy, "player stats identical after round trip")
+with app.app_context():
+    ch2 = bmod.champion(db.get_db(), sid_new)
+    ch1 = bmod.champion(db.get_db(), season_id)
+tname = lambda tid, sid_: q("SELECT name FROM teams WHERE id=?", tid)[0]["name"]
+ok(ch2 is not None and tname(ch2, sid_new) == tname(ch1, season_id),
+   "imported bracket resolves to the same champion")
+
+# imported bracket wiring is remapped, not pointing at the old season
+cross = q("""SELECT COUNT(*) n FROM matches m
+             JOIN matches w ON w.id = m.winner_to_match
+             WHERE m.season_id=? AND w.season_id != ?""", sid_new, sid_new)[0]["n"]
+ok(cross == 0, "bracket pointers remapped into the new season")
+
+# junk files rejected cleanly
+r = c.post("/seasons/import",
+           data={"file": (io.BytesIO(b"not json"), "x.json")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"isn&#39;t valid JSON" in r.data or b"isn't valid JSON" in r.data,
+   "non-JSON import rejected")
+r = c.post("/seasons/import",
+           data={"file": (io.BytesIO(b'{"format": "other"}'), "x.json")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"season export file" in r.data, "wrong-format JSON rejected")
+c.post(f"/season/{sid_new}/delete")
 
 print(f"\nALL {PASS} CHECKS PASSED")
