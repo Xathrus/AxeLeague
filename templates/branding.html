@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Branding — Abilene Axe League{% endblock %}
+{% block content %}
+<h1 class="page-title">Branding <span class="muted-small">venue logo &amp; colors</span></h1>
+
+{% if message %}<div class="flash-ok">{{ message }}</div>{% endif %}
+{% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+
+<div class="card-grid branding-grid">
+  <div class="card">
+    <div class="card-title">Venue logo</div>
+    {% if branding.logo %}
+    <div class="logo-preview">
+      <img src="{{ url_for('branding_logo_file') }}?v={{ branding.logo_version }}" alt="Current logo">
+    </div>
+    {% else %}
+    <p class="muted">No logo uploaded — the 🪓 is standing in. The logo appears in the top bar on every page.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('branding_logo') }}" enctype="multipart/form-data" class="inline-form">
+      <input type="file" name="logo" accept=".png,.jpg,.jpeg,.gif,.webp,.svg" required>
+      <button type="submit">Upload</button>
+    </form>
+    <p class="muted-small">PNG, JPG, GIF, WebP, or SVG · up to 5&nbsp;MB · shown about 32px tall, so wide logos work best.</p>
+    {% if branding.logo %}
+    <form method="post" action="{{ url_for('branding_logo_remove') }}" class="inline">
+      <button type="submit" class="ghost danger">Remove logo</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="card-title">Color scheme</div>
+    <form method="post" action="{{ url_for('branding_colors') }}">
+      <div class="color-rows">
+        {% for key, f in branding.fields.items() %}
+        <label class="color-row">
+          <span>{{ f[2] }}</span>
+          <input type="color" name="{{ key }}" value="{{ branding.colors[key] }}" oninput="this.nextElementSibling.textContent=this.value">
+          <code>{{ branding.colors[key] }}</code>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="primary">Save colors</button>
+    </form>
+    <form method="post" action="{{ url_for('branding_colors_reset') }}" class="inline"
+          onsubmit="return confirm('Reset all colors to the default stained-wood theme?');">
+      <button type="submit" class="ghost">Reset to default theme</button>
+    </form>
+    <p class="muted-small">Raised-panel and dim-text shades are derived automatically. Scoring colors (bullseye gold on chips, killshot green, the red lane divider) follow the accent where styled, but killshot/drop chip colors stay fixed so scores remain recognizable at a glance.</p>
+  </div>
+</div>
+{% endblock %}

@@ -38,6 +38,12 @@ def ensure_schema():
                PRIMARY KEY (season_id, round)
            )"""
     )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS settings (
+               key TEXT PRIMARY KEY,
+               value TEXT NOT NULL
+           )"""
+    )
     conn.commit()
     conn.close()
 

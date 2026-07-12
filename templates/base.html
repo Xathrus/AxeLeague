@@ -5,15 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Abilene Axe League{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+{% if branding and branding.custom %}
+<style>
+:root {
+{% for var, val in branding.css_vars.items() %}  {{ var }}: {{ val }};
+{% endfor %}}
+</style>
+{% endif %}
 </head>
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('index') }}">
-    <span class="brand-axe">🪓</span> ABILENE <em>AXE</em> LEAGUE
+    {% if branding and branding.logo %}
+    <img class="brand-logo" src="{{ url_for('branding_logo_file') }}?v={{ branding.logo_version }}" alt="Venue logo">
+    {% else %}
+    <span class="brand-axe">🪓</span>
+    {% endif %}
+    ABILENE <em>AXE</em> LEAGUE
   </a>
   {% block nav %}{% endblock %}
   {% if role %}
   <div class="who">
+    {% if can_edit %}
+    <a class="ghost tiny nav-branding {{ 'active' if request.endpoint == 'branding_page' }}"
+       href="{{ url_for('branding_page') }}">Branding</a>
+    {% endif %}
     <span class="role-badge {{ role }}">{{ {'admin':'Admin','scorekeeper':'Scorekeeper','viewer':'Viewing'}[role] }}</span>
     <form method="post" action="{{ url_for('logout') }}" class="inline">
       <button type="submit" class="ghost tiny">Log out</button>

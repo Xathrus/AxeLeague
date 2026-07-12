@@ -5,6 +5,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 
 ## Features
 
+- **Branding** — admin-only Branding tab: upload a venue logo for the top bar and pick a five-color scheme (background, panels, borders, text, accent) with one-click reset to the default stained-wood theme — package the app for any venue
 - **Logins & roles** — on first start the app prompts you to create Admin and
   Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
   matches only; "View Games & Stats" needs no password and is read-only
@@ -26,6 +27,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 ```
 app.py            Flask routes (pages + JSON API)
 auth.py           Logins, roles, first-run setup
+branding.py       Venue logo + color scheme storage
 scoring.py        Rules engine: outcomes, points, KS call logic, match state
 bracket.py        Round robin scheduler + double elimination bracket
 stats.py          Player/team stats and standings

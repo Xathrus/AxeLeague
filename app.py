@@ -5,6 +5,7 @@ from flask import (Flask, abort, jsonify, redirect, render_template, request,
 
 import auth
 import bracket as bracket_mod
+import branding as branding_mod
 import scoring
 import stats as stats_mod
 from auth import admin_required, scorekeeper_required
@@ -14,6 +15,7 @@ app = Flask(__name__)
 init_db(app)
 auth.ensure_schema()
 app.secret_key = auth.load_secret_key()
+app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # logo uploads
 
 
 # ---------------------------------------------------------------- auth gate
@@ -40,7 +42,69 @@ def inject_role():
         "role": role,
         "can_edit": role == "admin",
         "can_score": role in ("admin", "scorekeeper"),
+        "branding": branding_mod.get_branding(get_db()),
     }
+
+
+# ---------------------------------------------------------------- branding
+
+@app.route("/branding")
+@admin_required
+def branding_page():
+    return render_template("branding.html",
+                           message=request.args.get("m"),
+                           error=request.args.get("e"))
+
+
+@app.post("/branding/colors")
+@admin_required
+def branding_colors():
+    db = get_db()
+    for key in branding_mod.FIELDS:
+        v = request.form.get(key, "").strip()
+        if branding_mod.valid_hex(v):
+            branding_mod.set_setting(db, "brand_" + key, v)
+    db.commit()
+    return redirect(url_for("branding_page", m="Colors saved."))
+
+
+@app.post("/branding/colors/reset")
+@admin_required
+def branding_colors_reset():
+    db = get_db()
+    for key in branding_mod.FIELDS:
+        branding_mod.delete_setting(db, "brand_" + key)
+    db.commit()
+    return redirect(url_for("branding_page", m="Colors reset to the default theme."))
+
+
+@app.post("/branding/logo")
+@admin_required
+def branding_logo():
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        return redirect(url_for("branding_page", e="Choose a file first."))
+    ok, err = branding_mod.save_logo(get_db(), f)
+    if not ok:
+        return redirect(url_for("branding_page", e=err))
+    return redirect(url_for("branding_page", m="Logo uploaded."))
+
+
+@app.post("/branding/logo/remove")
+@admin_required
+def branding_logo_remove():
+    branding_mod.remove_logo(get_db())
+    return redirect(url_for("branding_page", m="Logo removed."))
+
+
+@app.route("/branding/logo-file")
+def branding_logo_file():
+    b = branding_mod.get_branding(get_db())
+    if not b["logo"]:
+        abort(404)
+    from flask import send_from_directory
+    return send_from_directory(branding_mod.LOGO_DIR, b["logo"],
+                               max_age=3600)
 
 
 @app.route("/setup", methods=["GET", "POST"])

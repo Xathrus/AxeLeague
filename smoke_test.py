@@ -483,6 +483,56 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- branding ---
+import io
+# viewer & scorekeeper can't touch branding
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+r = c.get("/branding")
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "viewer blocked from branding page")
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = c.post("/branding/colors", data={"bg": "#000000"})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "scorekeeper blocked from branding")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+
+ok(c.get("/branding").status_code == 200, "admin can open branding page")
+ok(b"Branding" in c.get("/").data, "admin sees Branding tab in top bar")
+
+# default: no override style, no logo
+r = c.get(f"/season/{season_id}/stats")
+ok(b"--bg: #" not in r.data, "no CSS override before customization")
+ok(c.get("/branding/logo-file").status_code == 404, "no logo yet -> 404")
+
+# save colors (invalid value ignored, valid ones applied + derived shades)
+c.post("/branding/colors", data={"bg": "#101820", "gold": "#00b3e6",
+                                 "ink": "not-a-color"})
+r = c.get("/")
+ok(b"--bg: #101820" in r.data and b"--gold: #00b3e6" in r.data,
+   "custom colors injected as CSS variables")
+ok(b"--panel-2:" in r.data and b"--ink-dim:" in r.data,
+   "derived shades injected")
+ok(b"not-a-color" not in r.data, "invalid color value ignored")
+
+# logo upload: bad type rejected, png accepted, served, cache-busted, removed
+r = c.post("/branding/logo", data={"logo": (io.BytesIO(b"MZ..."), "virus.exe")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"isn&#39;t supported" in r.data or b"isn't supported" in r.data,
+   "non-image logo rejected")
+png = (b"\x89PNG\r\n\x1a\n" + b"0" * 64)
+r = c.post("/branding/logo", data={"logo": (io.BytesIO(png), "venue.png")},
+           content_type="multipart/form-data", follow_redirects=True)
+ok(b"Logo uploaded" in r.data, "logo upload accepted")
+r = c.get("/branding/logo-file")
+ok(r.status_code == 200 and r.data.startswith(b"\x89PNG"), "logo served")
+ok(b"/branding/logo-file?v=" in c.get("/").data, "logo shown in top bar")
+c.post("/branding/logo/remove")
+ok(c.get("/branding/logo-file").status_code == 404, "logo removed")
+
+# reset colors
+c.post("/branding/colors/reset")
+ok(b"--bg: #101820" not in c.get("/").data, "color reset restores default theme")
+
 # delete season
 c.post(f"/season/{sid2}/delete")
 ok(q("SELECT COUNT(*) n FROM seasons WHERE id=?", sid2)[0]["n"] == 0,
