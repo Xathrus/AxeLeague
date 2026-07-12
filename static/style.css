@@ -358,3 +358,52 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .import-box summary { cursor: pointer; color: var(--ink-dim); font-size: 14px; }
 .import-box[open] summary { color: var(--gold); margin-bottom: 6px; }
 .import-box code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+/* ---------------- projector ---------------- */
+.proj-head { display: flex; justify-content: space-between; align-items: center;
+  margin: 4px 0 18px; }
+.proj-brand { display: flex; align-items: center; gap: 12px; font-size: 22px;
+  font-weight: 800; letter-spacing: .1em; color: var(--gold); }
+.proj-brand img { height: 44px; max-width: 220px; object-fit: contain; }
+.proj-clock { font-size: 22px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.proj-root { display: grid; gap: 20px; }
+.proj-root.cols-1 { grid-template-columns: minmax(0, 720px); justify-content: center; }
+.proj-root.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.proj-root.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1000px) { .proj-root.cols-3, .proj-root.cols-2 {
+  grid-template-columns: 1fr; } }
+.proj-idle { text-align: center; font-size: 28px; color: var(--ink-dim);
+  padding: 80px 0; }
+.proj-card { background: var(--panel); border: 1px solid var(--line);
+  border-radius: 14px; padding: 18px 20px; }
+.proj-season { font-size: 12px; letter-spacing: .12em; color: var(--ink-dim);
+  margin-bottom: 10px; }
+.proj-score { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.proj-team { display: flex; justify-content: space-between; align-items: baseline; }
+.proj-team-name { font-size: 26px; font-weight: 800; }
+.proj-team-wins { font-size: 34px; font-weight: 800; color: var(--gold);
+  font-variant-numeric: tabular-nums; }
+.proj-games { display: flex; gap: 14px; margin-bottom: 14px; }
+.proj-game { font-size: 15px; color: var(--ink-dim); display: flex; gap: 6px;
+  align-items: baseline; font-variant-numeric: tabular-nums; }
+.proj-game.done { color: var(--ink); }
+.proj-game-label { font-size: 11px; letter-spacing: .08em; }
+.proj-current { border-top: 1px solid var(--line); padding-top: 12px; }
+.proj-current-label { font-size: 12px; letter-spacing: .12em; color: var(--gold);
+  margin-bottom: 8px; }
+.proj-thrower { display: grid; grid-template-columns: minmax(0,1fr) auto auto;
+  gap: 10px; align-items: center; margin-bottom: 6px; }
+.proj-thrower-name { font-size: 18px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.proj-thrower-total { font-size: 26px; font-weight: 800; min-width: 44px;
+  text-align: right; font-variant-numeric: tabular-nums; }
+.proj-chips { display: flex; gap: 3px; }
+.proj-chip { width: 22px; height: 26px; border-radius: 5px; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 700;
+  background: var(--bg); border: 1px solid var(--line); }
+.proj-chip.lane-divide { margin-right: 9px; position: relative; }
+.proj-chip.lane-divide::after { content: ""; position: absolute; right: -7px;
+  top: 2px; bottom: 2px; width: 2px; background: var(--red); border-radius: 2px; }
+.proj-chip.empty { opacity: .35; }
+.proj-sd { font-size: 22px; font-weight: 800; letter-spacing: .1em;
+  color: var(--red); border-top: 1px solid var(--line); padding-top: 12px; }

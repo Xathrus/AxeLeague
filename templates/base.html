@@ -26,6 +26,8 @@
   {% block nav %}{% endblock %}
   {% if role %}
   <div class="who">
+    <a class="ghost tiny nav-branding {{ 'active' if request.endpoint == 'projector_page' }}"
+       href="{{ url_for('projector_page') }}">Projector</a>
     {% if can_edit %}
     <a class="ghost tiny nav-branding {{ 'active' if request.endpoint == 'branding_page' }}"
        href="{{ url_for('branding_page') }}">Branding</a>

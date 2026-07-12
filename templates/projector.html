@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Projector — {{ branding.name }}{% endblock %}
+{% block content %}
+<div class="proj-head">
+  <div class="proj-brand">
+    {% if branding.logo %}
+    <img src="{{ url_for('branding_logo_file') }}?v={{ branding.logo_version }}" alt="">
+    {% endif %}
+    <span>{{ branding.name|upper }}</span>
+  </div>
+  <div class="proj-clock" id="proj-clock"></div>
+</div>
+<div id="proj-root" class="proj-root">
+  <div class="proj-idle">Warming up…</div>
+</div>
+<script src="{{ url_for('static', filename='projector.js') }}"></script>
+{% endblock %}

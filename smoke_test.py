@@ -502,6 +502,93 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- projector ---
+c.post("/seasons", data={"name": "Proj Season"})
+sidP = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("P-A", "P-B", "P-C", "P-D"):
+    c.post(f"/season/{sidP}/teams", data={"name": t})
+for row in q("SELECT id FROM teams WHERE season_id=?", sidP):
+    c.post(f"/team/{row['id']}/players", data={"name": f"PP{row['id']}"})
+c.post(f"/season/{sidP}/schedule/generate")
+pmids = [r["id"] for r in q(
+    "SELECT id FROM matches WHERE season_id=? ORDER BY id LIMIT 5", sidP)]
+
+r = c.get("/api/projector")
+ok(r.status_code == 200 and r.get_json()["boards"] == [],
+   "projector empty when no active scoring")
+
+def start_scoring(mid, n_throws=3):
+    stx = state(mid)
+    hp = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+           stx["match"]["home_team_id"])[0]["id"]
+    ap = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+           stx["match"]["away_team_id"])[0]["id"]
+    s0 = sets_of(mid)[0]["id"]
+    assign(s0, hp, ap)
+    for _ in range(n_throws):
+        throw(s0, hp, "3")
+    return hp
+
+for mid in pmids[:4]:
+    start_scoring(mid)
+
+data = c.get("/api/projector").get_json()
+ok(len(data["boards"]) == 3, "projector caps at 3 boards")
+ok(data["boards"][0]["match_id"] == pmids[3],
+   "most recently scored match leads")
+ok([b["match_id"] for b in data["boards"]] == [pmids[3], pmids[2], pmids[1]],
+   "boards ordered by scoring recency")
+b0 = data["boards"][0]
+ok(b0["current"]["game"] == 1 and b0["current"]["set"] == 1,
+   "current set detected")
+ok(b0["current"]["home_throws"] == ["3", "3", "3"]
+   and b0["current"]["home_total"] == 9, "live throws and totals in payload")
+ok(b0["wins"] == {"home": 0, "away": 0}, "game wins present")
+
+# fresh throw on an older match bumps it to the front
+hp0 = q("""SELECT s.home_player_id p FROM sets s JOIN games g ON g.id=s.game_id
+           WHERE g.match_id=? AND s.home_player_id IS NOT NULL LIMIT 1""",
+        pmids[0])[0]["p"]
+s00 = sets_of(pmids[0])[0]["id"]
+throw(s00, hp0, "5")
+data = c.get("/api/projector").get_json()
+ok(data["boards"][0]["match_id"] == pmids[0],
+   "new throw moves match to the front")
+
+# completed matches drop off the projector
+def finish(mid):
+    stx = state(mid)
+    hp = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+           stx["match"]["home_team_id"])[0]["id"]
+    ap = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+           stx["match"]["away_team_id"])[0]["id"]
+    for gi in (0, 1):
+        for si in range(3):
+            sx = sets_of(mid)[gi*3+si]["id"]
+            assign(sx, hp, ap)
+            stq = state(mid)
+            have_h = len(stq["games"][gi]["sets"][si]["home_throws"])
+            have_a = len(stq["games"][gi]["sets"][si]["away_throws"])
+            for o in (["1"] * (10 - have_h) if si == 0 else ["M"] * (10 - have_h)):
+                throw(sx, hp, o)
+            for o in ["M"] * (10 - have_a):
+                throw(sx, ap, o)
+    post_json(f"/api/match/{mid}/complete")
+
+finish(pmids[0])
+data = c.get("/api/projector").get_json()
+ok(pmids[0] not in [b["match_id"] for b in data["boards"]],
+   "completed match leaves the projector")
+
+r = c.get("/projector")
+ok(r.status_code == 200 and b"projector.js" in r.data, "projector page renders")
+# viewers can watch the projector
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+ok(c.get("/projector").status_code == 200, "viewer can open projector")
+ok(c.get("/api/projector").status_code == 200, "viewer can poll projector API")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+c.post(f"/season/{sidP}/delete")
+
 # --- LB cross-bracket drops: no instant rematches (6-team repro) ---
 c.post("/seasons", data={"name": "Bracket Season"})
 sidB = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

@@ -689,6 +689,69 @@ def import_match_csv(match_id):
     return redirect(url_for("match_page", match_id=match_id, m=msg))
 
 
+@app.route("/projector")
+def projector_page():
+    return render_template("projector.html")
+
+
+@app.route("/api/projector")
+def api_projector():
+    db = get_db()
+    rows = db.execute(
+        """SELECT g.match_id AS mid, MAX(t.id) AS last_throw
+           FROM throws t
+           JOIN sets s ON s.id = t.set_id
+           JOIN games g ON g.id = s.game_id
+           JOIN matches m ON m.id = g.match_id
+           WHERE m.completed = 0
+           GROUP BY g.match_id
+           ORDER BY last_throw DESC
+           LIMIT 3""").fetchall()
+    boards = []
+    for r in rows:
+        m = db.execute("SELECT * FROM matches WHERE id=?", (r["mid"],)).fetchone()
+        state = scoring.compute_match_state(db, m["id"])
+        season = db.execute("SELECT name FROM seasons WHERE id=?",
+                            (m["season_id"],)).fetchone()
+        games = state["games"]
+        wins = {"home": sum(1 for g in games if g["winner"] == "home"),
+                "away": sum(1 for g in games if g["winner"] == "away")}
+        # current set: first incomplete in play order, else the last one
+        cur = None
+        for g in games:
+            for s_ in g["sets"]:
+                if not s_["complete"]:
+                    cur = (g, s_)
+                    break
+            if cur:
+                break
+        if not cur:
+            g = games[-1]
+            cur = (g, g["sets"][-1])
+        cg, cs = cur
+        boards.append({
+            "match_id": m["id"],
+            "season": season["name"] if season else "",
+            "stage": m["stage"],
+            "home_name": state["match"]["home_team_name"],
+            "away_name": state["match"]["away_team_name"],
+            "wins": wins,
+            "status": state["status"]["state"],
+            "games": [{"number": g["number"], "home_total": g["home_total"],
+                       "away_total": g["away_total"], "winner": g["winner"],
+                       "complete": g["complete"]} for g in games],
+            "current": {
+                "game": cg["number"], "set": cs["number"],
+                "home_player": cs["home_player_name"],
+                "away_player": cs["away_player_name"],
+                "home_total": cs["home_total"], "away_total": cs["away_total"],
+                "home_throws": [t["outcome"] for t in cs["home_throws"]],
+                "away_throws": [t["outcome"] for t in cs["away_throws"]],
+            },
+        })
+    return jsonify({"boards": boards})
+
+
 @app.route("/match/<int:match_id>")
 def match_page(match_id):
     m = _match_or_404(match_id)
