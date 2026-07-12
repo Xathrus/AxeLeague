@@ -19,6 +19,25 @@ FIELDS = {
     "gold":  ("--gold",  "#d9a441", "Accent"),
 }
 HEX_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+DEFAULT_NAME = "Abilene Axe League"
+
+# Preset themes selectable with one click on the Branding page
+PRESETS = {
+    "classic": {  # the default stained-wood look (clears overrides)
+        "label": "Stained Wood (default)",
+        "colors": None,
+    },
+    "rwb": {
+        "label": "Red, White & Blue",
+        "colors": {
+            "bg":    "#141a26",   # deep navy-grey
+            "panel": "#1f2a3d",   # steel blue
+            "line":  "#41527a",
+            "ink":   "#eef1f5",   # off-white
+            "gold":  "#d94a4a",   # bold red accent
+        },
+    },
+}
 LOGO_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 LOGO_DIR = os.path.join(os.path.dirname(dbmod.DB_PATH), "branding")
 
@@ -68,6 +87,7 @@ def get_branding(db):
     logo = s.get("brand_logo")
     if logo and not os.path.exists(os.path.join(LOGO_DIR, logo)):
         logo = None
+    name = (s.get("brand_name") or "").strip()
     return {
         "colors": colors,
         "css_vars": css_vars,
@@ -75,6 +95,9 @@ def get_branding(db):
         "logo": logo,
         "logo_version": s.get("brand_logo_version", "0"),
         "fields": FIELDS,
+        "name": name or DEFAULT_NAME,
+        "name_custom": bool(name),
+        "presets": PRESETS,
     }
 
 

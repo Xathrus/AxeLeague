@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Abilene Axe League{% endblock %}</title>
+<title>{% block title %}{{ branding.name }}{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 {% if branding and branding.custom %}
 <style>
@@ -21,7 +21,7 @@
     {% else %}
     <span class="brand-axe">🪓</span>
     {% endif %}
-    ABILENE <em>AXE</em> LEAGUE
+    {% if branding.name_custom %}{{ branding.name|upper }}{% else %}ABILENE <em>AXE</em> LEAGUE{% endif %}
   </a>
   {% block nav %}{% endblock %}
   {% if role %}

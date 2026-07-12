@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Branding — Abilene Axe League{% endblock %}
+{% block title %}Branding — {{ branding.name }}{% endblock %}
 {% block content %}
 <h1 class="page-title">Branding <span class="muted-small">venue logo &amp; colors</span></h1>
 
@@ -7,6 +7,22 @@
 {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
 
 <div class="card-grid branding-grid">
+  <div class="card">
+    <div class="card-title">Venue name</div>
+    <p class="muted-small">Shown in the top bar and browser tab on every page.</p>
+    <form method="post" action="{{ url_for('branding_name') }}" class="inline-form">
+      <input name="name" value="{{ branding.name if branding.name_custom else '' }}"
+             placeholder="Abilene Axe League" maxlength="60">
+      <button type="submit">Save</button>
+    </form>
+    {% if branding.name_custom %}
+    <form method="post" action="{{ url_for('branding_name') }}" class="inline">
+      <input type="hidden" name="name" value="">
+      <button type="submit" class="ghost">Reset to default name</button>
+    </form>
+    {% endif %}
+  </div>
+
   <div class="card">
     <div class="card-title">Venue logo</div>
     {% if branding.logo %}
@@ -30,6 +46,15 @@
 
   <div class="card">
     <div class="card-title">Color scheme</div>
+    <div class="preset-row">
+      {% for key, p in branding.presets.items() %}
+      <form method="post" action="{{ url_for('branding_preset') }}" class="inline">
+        <input type="hidden" name="preset" value="{{ key }}">
+        <button type="submit" class="ghost">{{ p.label }}</button>
+      </form>
+      {% endfor %}
+    </div>
+    <p class="muted-small">Pick a preset theme, or fine-tune the individual colors below.</p>
     <form method="post" action="{{ url_for('branding_colors') }}">
       <div class="color-rows">
         {% for key, f in branding.fields.items() %}

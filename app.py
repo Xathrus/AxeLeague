@@ -68,6 +68,40 @@ def branding_colors():
     return redirect(url_for("branding_page", m="Colors saved."))
 
 
+@app.post("/branding/name")
+@admin_required
+def branding_name():
+    db = get_db()
+    name = request.form.get("name", "").strip()
+    if name:
+        branding_mod.set_setting(db, "brand_name", name)
+        msg = "Venue name saved."
+    else:
+        branding_mod.delete_setting(db, "brand_name")
+        msg = "Venue name reset to the default."
+    db.commit()
+    return redirect(url_for("branding_page", m=msg))
+
+
+@app.post("/branding/preset")
+@admin_required
+def branding_preset():
+    key = request.form.get("preset", "")
+    preset = branding_mod.PRESETS.get(key)
+    if not preset:
+        abort(400)
+    db = get_db()
+    if preset["colors"] is None:
+        for k in branding_mod.FIELDS:
+            branding_mod.delete_setting(db, "brand_" + k)
+    else:
+        for k, v in preset["colors"].items():
+            branding_mod.set_setting(db, "brand_" + k, v)
+    db.commit()
+    return redirect(url_for("branding_page",
+                            m=f"Theme applied: {preset['label']}."))
+
+
 @app.post("/branding/colors/reset")
 @admin_required
 def branding_colors_reset():

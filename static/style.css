@@ -340,3 +340,9 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .color-row code { color: var(--ink-dim); font-size: 12px; }
 .flash-ok { background: #1e3a2a; border: 1px solid var(--green); color: #cfe8d8;
   padding: 10px 12px; border-radius: 8px; margin: 12px 0; }
+
+/* sortable stats headers */
+.stats-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.stats-table th.sortable:hover { color: var(--gold); }
+.stats-table th.sort-desc::after { content: " ▼"; font-size: 10px; color: var(--gold); }
+.stats-table th.sort-asc::after { content: " ▲"; font-size: 10px; color: var(--gold); }

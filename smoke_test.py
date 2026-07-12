@@ -533,6 +533,31 @@ ok(c.get("/branding/logo-file").status_code == 404, "logo removed")
 c.post("/branding/colors/reset")
 ok(b"--bg: #101820" not in c.get("/").data, "color reset restores default theme")
 
+# venue name
+c.post("/branding/name", data={"name": "Axe & Ale House"})
+r = c.get("/")
+ok(b"AXE &amp; ALE HOUSE" in r.data, "venue name shown in top bar")
+ok(b"<title>Axe &amp; Ale House</title>" in c.get("/").data,
+   "venue name used in page title")
+c.post("/branding/name", data={"name": ""})
+ok(b"ABILENE <em>AXE</em> LEAGUE" in c.get("/").data,
+   "empty name restores default branding")
+
+# preset themes
+c.post("/branding/preset", data={"preset": "rwb"})
+r = c.get("/")
+ok(b"--gold: #d94a4a" in r.data and b"--bg: #141a26" in r.data,
+   "Red White & Blue preset applied")
+c.post("/branding/preset", data={"preset": "classic"})
+ok(b"--gold: #d94a4a" not in c.get("/").data,
+   "classic preset restores default theme")
+ok(c.post("/branding/preset", data={"preset": "bogus"}).status_code == 400,
+   "unknown preset rejected")
+
+# stats sorting assets
+r = c.get(f"/season/{season_id}/stats")
+ok(b"sort.js" in r.data, "stats page loads the table sorter")
+
 # delete season
 c.post(f"/season/{sid2}/delete")
 ok(q("SELECT COUNT(*) n FROM seasons WHERE id=?", sid2)[0]["n"] == 0,

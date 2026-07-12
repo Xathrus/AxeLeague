@@ -5,7 +5,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 
 ## Features
 
-- **Branding** — admin-only Branding tab: upload a venue logo for the top bar and pick a five-color scheme (background, panels, borders, text, accent) with one-click reset to the default stained-wood theme — package the app for any venue
+- **Branding** — admin-only Branding tab: set the venue name (replaces "Abilene Axe League" everywhere), upload a venue logo, and pick a five-color scheme (background, panels, borders, text, accent) with one-click presets — the default Stained Wood theme or a Red, White & Blue theme — so the app can be packaged for any venue
 - **Logins & roles** — on first start the app prompts you to create Admin and
   Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
   matches only; "View Games & Stats" needs no password and is read-only
@@ -18,7 +18,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Killshot call tracking** — 2 calls per player per set, +1 bonus call per drop, enforced in real time with pip indicators
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **Short rosters** — the same player may throw multiple sets in a game
-- **Stats** — regular season and playoffs tracked in separate sections; League Overview cards (regular-season league average, drop rate, bullseye ratio, season and current-week high scores, record holders) plus Weekly High Score cards per round date; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, drops, drop %, KS attempts, kill %). Bullseye percentages exclude killshot attempts, since a killshot can't score a bullseye, Weekly Averages grouped by round dates, per team per season
+- **Stats** — regular season and playoffs tracked in separate sections; League Overview cards (regular-season league average, drop rate, bullseye ratio, season and current-week high scores, record holders) plus Weekly High Score cards per round date; every stats table sorts by clicking a column header; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, drops, drop %, KS attempts, kill %). Bullseye percentages exclude killshot attempts, since a killshot can't score a bullseye, Weekly Averages grouped by round dates, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
 - **Playoffs** — double elimination bracket seeded by standings, byes auto-resolved, grand final reset match if the lower-bracket team wins GF1
 
