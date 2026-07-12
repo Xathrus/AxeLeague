@@ -3,6 +3,9 @@
 (function () {
   const root = document.getElementById("proj-root");
   const clock = document.getElementById("proj-clock");
+  // Stable board positions: a match keeps its slot (left / center / right)
+  // for as long as it's on screen; new matches only fill vacated slots.
+  let slots = [];
   const OUTCOME_CLASS = {
     "1": "o-score", "2": "o-score", "3": "o-score", "4": "o-score", "5": "o-score",
     "B": "o-bull", "KH": "o-kshit", "KD": "o-ksdrop", "KM": "o-ksmiss",
@@ -97,13 +100,35 @@
       const data = await r.json();
       root.innerHTML = "";
       if (!data.boards.length) {
+        slots = [];
         root.appendChild(el("div", "proj-idle",
           "No matches underway — check back soon 🪓"));
         root.className = "proj-root";
         return;
       }
-      root.className = "proj-root cols-" + data.boards.length;
-      data.boards.forEach(b => root.appendChild(board(b)));
+      const byId = {};
+      data.boards.forEach(b => { byId[b.match_id] = b; });
+      // 1) vacate slots whose match is gone (completed / rotated out)
+      slots = slots.map(id => (id !== null && byId[id] !== undefined) ? id : null);
+      // 2) place new matches (most recent first) into open slots, left first
+      data.boards.forEach(b => {
+        if (slots.indexOf(b.match_id) !== -1) return;
+        const open = slots.indexOf(null);
+        if (open !== -1) slots[open] = b.match_id;
+        else if (slots.length < 3) slots.push(b.match_id);
+      });
+      // 3) drop trailing empties so 1-2 matches don't leave dangling gaps
+      while (slots.length && slots[slots.length - 1] === null) slots.pop();
+
+      root.className = "proj-root cols-" + slots.length;
+      slots.forEach(id => {
+        if (id === null) {
+          root.appendChild(el("div", "proj-card proj-empty",
+            "Waiting for the next match…"));
+        } else {
+          root.appendChild(board(byId[id]));
+        }
+      });
       if (data.standings && data.standings.rows.length) {
         root.appendChild(standingsCard(data.standings));
       }

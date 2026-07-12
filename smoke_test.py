@@ -597,6 +597,9 @@ ok(pmids[0] not in [b["match_id"] for b in data["boards"]],
 
 r = c.get("/projector")
 ok(r.status_code == 200 and b"projector.js" in r.data, "projector page renders")
+pj = open("static/projector.js").read()
+ok("keeps its slot" in pj and "vacated" in pj.lower() and "slots" in pj,
+   "projector uses stable slot placement (no reshuffling on new scores)")
 # viewers can watch the projector
 c.post("/logout"); c.post("/login", data={"role": "viewer"})
 ok(c.get("/projector").status_code == 200, "viewer can open projector")

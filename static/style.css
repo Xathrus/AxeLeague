@@ -423,3 +423,8 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   font-weight: 800; }
 .proj-standing-bulls { font-size: 13px; color: var(--ink-dim);
   font-variant-numeric: tabular-nums; }
+
+/* placeholder for a vacated projector slot */
+.proj-card.proj-empty { display: flex; align-items: center; justify-content: center;
+  color: var(--ink-dim); font-size: 16px; min-height: 220px;
+  border-style: dashed; background: transparent; }
