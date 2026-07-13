@@ -24,7 +24,8 @@ app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # logo uploads
 
 @app.before_request
 def require_login():
-    open_endpoints = {"setup", "login", "logout", "static"}
+    open_endpoints = {"setup", "login", "logout", "static",
+                      "branding_logo_file"}
     if request.endpoint in open_endpoints or request.endpoint is None:
         return None
     db = get_db()

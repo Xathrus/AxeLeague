@@ -56,6 +56,10 @@ ok(r.status_code in (302, 303), "setup unavailable once done")
 c.post("/logout")
 r = c.get("/", follow_redirects=False)
 ok("/login" in r.headers.get("Location", ""), "logged out -> login redirect")
+# the venue logo endpoint must be reachable pre-login (login page shows it);
+# 404 here (no logo uploaded yet) proves it wasn't bounced to /login
+r = c.get("/branding/logo-file", follow_redirects=False)
+ok(r.status_code == 404, "logo endpoint reachable without login")
 
 # login page: viewer button is not a submit (Enter-key bug fix)
 lp = c.get("/login").data
@@ -64,6 +68,8 @@ vbtn = _re.search(rb'<button[^>]*id="viewer-btn"[^>]*>', lp).group(0)
 ok(b'type="button"' in vbtn, "viewer button is type=button, not submit")
 ok(b"never fall through to a viewer login" in lp,
    "empty-role submit guarded in login script")
+ok(b'const form = document.getElementById("login-form")' in lp,
+   "login script defines the form reference it uses")
 
 # viewer: read-only
 c.post("/login", data={"role": "viewer"})
@@ -934,6 +940,13 @@ ok(b"Logo uploaded" in r.data, "logo upload accepted")
 r = c.get("/branding/logo-file")
 ok(r.status_code == 200 and r.data.startswith(b"\x89PNG"), "logo served")
 ok(b"/branding/logo-file?v=" in c.get("/").data, "logo shown in top bar")
+c.post("/logout")
+r = c.get("/branding/logo-file")
+ok(r.status_code == 200 and r.data.startswith(b"\x89PNG"),
+   "logo loads on the login page before logging in")
+lp2 = c.get("/login").data
+ok(b"/branding/logo-file?v=" in lp2, "login page top bar includes the logo")
+c.post("/login", data={"role": "admin", "password": "adminpw"})
 c.post("/branding/logo/remove")
 ok(c.get("/branding/logo-file").status_code == 404, "logo removed")
 
