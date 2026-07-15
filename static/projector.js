@@ -86,7 +86,7 @@
       txt.appendChild(el("strong", "", a.name));
       const whoBits = a.who + (a.who_team ? " (" + a.who_team + ")" : "");
       txt.appendChild(document.createTextNode(" — " + whoBits
-        + (a.detail ? " · " + a.detail : "")));
+        + (a.desc ? " · " + a.desc : "")));
       line.appendChild(txt);
       grid.appendChild(line);
     });

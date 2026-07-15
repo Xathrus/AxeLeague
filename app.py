@@ -837,7 +837,7 @@ def api_projector():
                               (boards[0]["match_id"],)).fetchone()["season_id"]
         recent = [
             {"icon": a["icon"], "name": a["name"], "who": a["who"],
-             "who_team": a["who_team"], "detail": a["detail"]}
+             "who_team": a["who_team"], "desc": a["desc"]}
             for a in ach.list_achievements(db, sid_lead)[:5]
         ]
     return jsonify({"boards": boards, "standings": standings,

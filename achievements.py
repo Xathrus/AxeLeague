@@ -17,39 +17,42 @@ import sqlite3
 
 import db as dbmod
 
-MILESTONES = [(250, "warming_up"), (500, "splitting_wood"), (1000, "timber")]
+MILESTONES = [(250, "warming_up"), (500, "splitting_wood"),
+              (1000, "timber"), (1500, "deforestation")]
 
 DEFS = {
     # ---- personal ----
-    "club_50":        ("Club 50", "player", "🪓", "50+ in a set"),
-    "club_60":        ("Club 60", "player", "🏅", "60+ in a set"),
-    "perfection":     ("Perfection", "player", "💎", "A perfect 64 set"),
-    "halfway_there":  ("Halfway There", "player", "🎯", "Half the set's throws were bullseyes"),
-    "hard_way_50":    ("50 The Hard Way", "player", "🧱", "50+ with no more than one bullseye"),
-    "nailed_it":      ("Nailed It", "player", "📌", "2+ killshots in one set"),
-    "by_the_numbers": ("By the Numbers", "player", "🔢", "Scored 1, 2, 3, 4, 5, and a bullseye this season"),
+    "club_50":        ("Club 50", "player", "🪓", "Score 50+ in a set"),
+    "club_60":        ("Club 60", "player", "🏅", "Score 60+ in a set"),
+    "perfection":     ("Perfection", "player", "💎", "Score a perfect 64"),
+    "halfway_there":  ("Halfway There", "player", "🎯", "Bullseye half a set's throws"),
+    "hard_way_50":    ("50 The Hard Way", "player", "🧱", "Score 50+ with at most one bullseye"),
+    "nailed_it":      ("Nailed It", "player", "📌", "Land 2+ killshots in a set"),
+    "by_the_numbers": ("By the Numbers", "player", "🔢", "Score a 1, 2, 3, 4, 5, and a bullseye this season"),
     "great_recovery": ("Great Recovery", "player", "🩹", "Bullseye right after a drop"),
     "phenomenal_recovery": ("Phenomenal Recovery", "player", "⚡", "Killshot right after a drop"),
-    "turning_it_around": ("Turning it Around", "player", "🔄", "3 killshots in a set that had a drop"),
-    "on_fire":        ("On Fire", "player", "🔥", "5 bullseyes in a row"),
-    "first_blood":    ("First Blood", "player", "🗡️", "Killshot on the first throw of a set"),
-    "the_closer":     ("The Closer", "player", "🧊", "Clinched the match from 5+ down at the start of a set"),
-    "redemption_arc": ("Redemption Arc", "player", "🐦‍🔥", "Beat a thrower who beat you earlier this season"),
-    "warming_up":     ("Warming Up", "player", "🌡️", "250 season points"),
-    "splitting_wood": ("Splitting Wood", "player", "🪵", "500 season points"),
-    "timber":         ("TIMBER!", "player", "🌲", "1000 season points"),
+    "turning_it_around": ("Turning it Around", "player", "🔄", "Land 3 killshots in a set with a drop"),
+    "on_fire":        ("On Fire", "player", "🔥", "Hit 5 bullseyes in a row"),
+    "first_blood":    ("First Blood", "player", "🗡️", "Killshot on a set's first throw"),
+    "the_closer":     ("The Closer", "player", "🧊", "Clinch the match from 5+ down"),
+    "hope_not_fluke": ("Hope that Isn't a Fluke", "player", "🍀", "Beat your average by 10+"),
+    "bad_days":       ("Everyone Had Bad Days", "player", "📉", "Fall 10+ below your average"),
+    "warming_up":     ("Warming Up", "player", "🌡️", "Reach 250 season points"),
+    "splitting_wood": ("Splitting Wood", "player", "🪵", "Reach 500 season points"),
+    "timber":         ("TIMBER!", "player", "🌲", "Reach 1000 season points"),
+    "deforestation":  ("Deforestation", "player", "🪚", "Reach 1500 season points"),
     # ---- team ----
-    "suck_less":      ("We Suck Less", "team", "😅", "Won a match in sudden death"),
-    "suck_more":      ("We Suck More", "team", "😬", "Lost a match in sudden death"),
-    "powers_combined": ("By Our Powers Combined", "team", "🤝", "160+ combined in one game"),
-    "comeback":       ("Comeback", "team", "↩️", "Won the match after losing game 1"),
-    "over_the_hill":  ("Over the Hill", "team", "⛰️", "Winning record mathematically locked in"),
-    "nail_biter":     ("Nail Biter", "team", "😰", "Won a match by exactly 1 point"),
-    "mercy_please":   ("Mercy Please", "team", "🥵", "Won a match by 50+ points"),
-    "perfect_storm":  ("Perfect Storm", "team", "🌪️", "Every set 55+ in the same game"),
+    "suck_less":      ("We Suck Less", "team", "😅", "Win a sudden-death match"),
+    "suck_more":      ("We Suck More", "team", "😬", "Lose a sudden-death match"),
+    "powers_combined": ("By Our Powers Combined", "team", "🤝", "Combine for 160+ in one game"),
+    "comeback":       ("Comeback", "team", "↩️", "Win after losing game 1"),
+    "over_the_hill":  ("Over the Hill", "team", "⛰️", "Lock in a winning season"),
+    "nail_biter":     ("Nail Biter", "team", "😰", "Win by exactly 1 point"),
+    "mercy_please":   ("Mercy Please", "team", "🥵", "Win by 50+ points"),
+    "perfect_storm":  ("Perfect Storm", "team", "🌪️", "All three sets 55+ in a game"),
     "giant_toppler":  ("Giant Toppler", "team", "🗿", "Beat a team with a better record"),
-    "how_did_that_happen": ("How did that happen?", "team", "🤷", "Won a game without a single bullseye"),
-    "try_try_again":  ("If at first you don't succeed", "team", "🔁", "Beat a team that beat you earlier this season"),
+    "how_did_that_happen": ("How did that happen?", "team", "🤷", "Win a game with zero bullseyes"),
+    "try_try_again":  ("If at first you don't succeed", "team", "🔁", "Beat a team that beat you"),
 }
 
 
@@ -67,10 +70,12 @@ LONG_DESC = {
     "on_fire": "Hit five bullseyes in a row.",
     "first_blood": "Landed a killshot on the very first throw of a set.",
     "the_closer": "Started a set with the team down five or more points in the game that clinched the match — and closed it out.",
-    "redemption_arc": "Out-threw an opponent who had beaten them earlier in the season.",
-    "warming_up": "Reached 250 cumulative points across the season.",
-    "splitting_wood": "Reached 500 cumulative points across the season.",
-    "timber": "Reached 1,000 cumulative points across the season.",
+    "hope_not_fluke": "Threw a set 10 or more points above their season average, with at least four sets already on record.",
+    "bad_days": "Threw a set 10 or more points below their season average, with at least four sets already on record.",
+    "warming_up": "Reached 250 cumulative points across the season, playoffs included.",
+    "splitting_wood": "Reached 500 cumulative points across the season, playoffs included.",
+    "timber": "Reached 1,000 cumulative points across the season, playoffs included.",
+    "deforestation": "Reached 1,500 cumulative points across the season, playoffs included.",
     "suck_less": "Won a match decided by sudden death.",
     "suck_more": "Lost a match decided by sudden death.",
     "powers_combined": "Combined for 160 or more points as a team in a single game.",
@@ -316,10 +321,12 @@ def _detect(db, season_id):
     # ---------- season-cumulative (regular season only) ----------
     reg = [m for m in matches if m["stage"] == "regular"]
 
-    # By the Numbers + milestones, in chronological set order
+    # By the Numbers (regular season only), point milestones (all stages),
+    # and the vs-your-own-average pair — one chronological walk of every set
     seen_vals, cum_pts, milestones_hit = {}, {}, {}
+    prior = {}  # pid -> [full_set_count, full_set_points]
     NUMBERS = {"1", "2", "3", "4", "5", "B"}
-    for m in reg:
+    for m in matches:
         for gn in sorted(m["games"]):
             for sn in sorted(m["games"][gn]):
                 st = m["games"][gn][sn]
@@ -328,13 +335,14 @@ def _detect(db, season_id):
                     pid = sd["pid"]
                     if not pid or not sd["seq"]:
                         continue
-                    sv = seen_vals.setdefault(pid, set())
-                    if not NUMBERS <= sv:
-                        sv.update(o for o in sd["seq"] if o in NUMBERS)
-                        if NUMBERS <= sv:
-                            add("by_the_numbers", f"p{pid}", player_id=pid,
-                                match_id=m["id"], gn=gn, sn=sn,
-                                detail="all of 1–5 plus a bullseye")
+                    if m["stage"] == "regular":
+                        sv = seen_vals.setdefault(pid, set())
+                        if not NUMBERS <= sv:
+                            sv.update(o for o in sd["seq"] if o in NUMBERS)
+                            if NUMBERS <= sv:
+                                add("by_the_numbers", f"p{pid}", player_id=pid,
+                                    match_id=m["id"], gn=gn, sn=sn,
+                                    detail="all of 1–5 plus a bullseye")
                     before = cum_pts.get(pid, 0)
                     after = before + sd["total"]
                     cum_pts[pid] = after
@@ -345,25 +353,23 @@ def _detect(db, season_id):
                             add(key, f"p{pid}", player_id=pid,
                                 match_id=m["id"], gn=gn, sn=sn,
                                 detail=f"{thresh} season points")
-
-    # Redemption Arc: head-to-head set results in chronological order
-    beaten_by = {}
-    for m in reg:
-        opp = {"home": m["away_team_id"], "away": m["home_team_id"]}
-        for gn in sorted(m["games"]):
-            for sn in sorted(m["games"][gn]):
-                st = m["games"][gn][sn]
-                h, a = st["home"], st["away"]
-                if not h["pid"] or not a["pid"] or h["total"] == a["total"]:
-                    continue
-                if not h["seq"] and not a["seq"]:
-                    continue
-                win, lose = (h, a) if h["total"] > a["total"] else (a, h)
-                if lose["pid"] in beaten_by.get(win["pid"], set()):
-                    add("redemption_arc", f"s{st['set_id']}",
-                        player_id=win["pid"], match_id=m["id"], gn=gn, sn=sn,
-                        detail=f"{win['total']}–{lose['total']} rematch win")
-                beaten_by.setdefault(lose["pid"], set()).add(win["pid"])
+                    # average comparisons use completed (10-throw) sets only,
+                    # so half-entered sets can't trigger a false Bad Day
+                    if len(sd["seq"]) == 10:
+                        cnt, pts = prior.get(pid, (0, 0))
+                        if cnt >= 4:
+                            avg = pts / cnt
+                            if sd["total"] >= avg + 10:
+                                add("hope_not_fluke", f"s{st['set_id']}",
+                                    player_id=pid, match_id=m["id"],
+                                    gn=gn, sn=sn,
+                                    detail=f"{sd['total']} vs a {avg:.1f} average")
+                            if sd["total"] <= avg - 10:
+                                add("bad_days", f"s{st['set_id']}",
+                                    player_id=pid, match_id=m["id"],
+                                    gn=gn, sn=sn,
+                                    detail=f"{sd['total']} vs a {avg:.1f} average")
+                        prior[pid] = (cnt + 1, pts + sd["total"])
 
     # Team records in order: Giant Toppler, If at first…, Over the Hill
     sched_count = {}

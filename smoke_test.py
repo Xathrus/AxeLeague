@@ -640,11 +640,11 @@ if 2 * hawk_wins > n_sched:
     ok(len(achq("over_the_hill", team_id=tidA["Hawks"])) == 1,
        "Over the Hill fired once when clinched")
 
-# Redemption Arc + If at first + Giant Toppler: match 2 IS the rematch —
-# Doves (0-1) beat Hawks (1-0), and D1 beat H1 in G2S1 after losing in match 1
+# If at first + Giant Toppler: match 2 IS the rematch —
+# Doves (0-1) beat Hawks (1-0)
 doves_team = tidA["Doves"]
-ok(len(achq("redemption_arc", player_id=pidA["D1"])) >= 1,
-   "Redemption Arc (D1 beat H1 after losing to him in match 1)")
+ok("redemption_arc" not in achmod.DEFS, "Redemption Arc removed from definitions")
+ok(len(achq("redemption_arc")) == 0, "no Redemption Arc rows generated")
 ok(len(achq("try_try_again", team_id=doves_team, match_id=am2)) == 1,
    "If at first you don't succeed (Doves rematch win)")
 ok(len(achq("giant_toppler", team_id=doves_team, match_id=am2)) == 1,
@@ -704,8 +704,8 @@ ok(b"Round 1 \xc2\xb7 Game 1 \xc2\xb7 Set 1" in r.data,
    "Round / Game / Set location line rendered")
 # projector still uses the short description set
 import achievements as _a
-ok(_a.DEFS["perfection"][3] == "A perfect 64 set",
-   "short projector descriptions unchanged")
+ok(_a.DEFS["perfection"][3] == "Score a perfect 64",
+   "short projector description is goal-phrased")
 ok(b'data-scope="player"' in r.data and b'data-scope="team"' in r.data,
    "achievements page carries scope filters")
 ok(b'<optgroup label="Personal">' in r.data
@@ -729,9 +729,104 @@ post_json(f"/api/set/{g3s3}/undo", {"player_id": HH(1)})  # make room
 throw(g3s3, HH(1), "B")
 pj = c.get("/api/projector").get_json()
 ok(pj["achievements"] and len(pj["achievements"]) <= 5
-   and all("icon" in a and "name" in a for a in pj["achievements"]),
-   "projector includes up to 5 recent achievements")
+   and all("icon" in a and "name" in a and "desc" in a
+           and "detail" not in a for a in pj["achievements"]),
+   "projector includes up to 5 recent achievements with goal text")
+goal_map = {a["name"]: a["desc"] for a in pj["achievements"]}
+for nm, goal in goal_map.items():
+    kd = [v for v in achmod.DEFS.values() if v[0] == nm]
+    ok(kd and kd[0][3] == goal, f"projector goal text for {nm!r} is the goal, not the deed")
 c.post(f"/season/{sidA}/delete")
+
+# --- Deforestation config + fluke/bad-day + playoff milestones ---
+ok("deforestation" in achmod.DEFS
+   and (1500, "deforestation") in achmod.MILESTONES,
+   "Deforestation defined at 1500 season points")
+
+c.post("/seasons", data={"name": "Avg Season"})
+sidV = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Oaks", "Pines"):
+    c.post(f"/season/{sidV}/teams", data={"name": t})
+tidV = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidV)}
+c.post(f"/team/{tidV['Oaks']}/players", data={"name": "OX"})
+c.post(f"/team/{tidV['Pines']}/players", data={"name": "PX"})
+pidV = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidV)}
+c.post(f"/season/{sidV}/schedule/generate")
+vm = [r["id"] for r in q("SELECT id FROM matches WHERE season_id=?"
+                         " ORDER BY id", sidV)]
+vst = state(vm[0])
+oh = pidV["OX"] if vst["match"]["home_team_id"] == tidV["Oaks"] else pidV["PX"]
+oa = pidV["PX"] if oh == pidV["OX"] else pidV["OX"]
+vsets = sets_of(vm[0])
+# OX side: four 30-point sets, then a 40 (avg 30 -> +10 => fluke),
+# then a 20 (avg 32 -> -12 => bad day)
+plan = [["3"]*10, ["3"]*10, ["3"]*10, ["3"]*10, ["4"]*10, ["2"]*10] + [["M"]*10]*3
+ox_is_home = oh == pidV["OX"]
+for i, ho in enumerate(plan):
+    sx = vsets[i]["id"]
+    assign(sx, oh, oa)
+    fill(sx, oh, oa, ho if ox_is_home else ["M"]*10,
+         ["M"]*10 if ox_is_home else ho)
+def achV(key, **kw):
+    conds, args = ["season_id=?", "key=?"], [sidV, key]
+    for col, v in kw.items():
+        conds.append(f"{col}=?"); args.append(v)
+    return q("SELECT * FROM achievements WHERE " + " AND ".join(conds), *args)
+fl = achV("hope_not_fluke", player_id=pidV["OX"])
+ok(len(fl) == 1, "Hope that Isn't a Fluke earned (40 vs 30 average)")
+ok(fl[0]["game_number"] == 2 and fl[0]["set_number"] == 2,
+   "fluke credited to the 5th set thrown")
+bd = achV("bad_days", player_id=pidV["OX"])
+ok(len(bd) == 1, "Everyone Had Bad Days earned (20 vs 32 average)")
+ok(len(achV("hope_not_fluke", player_id=pidV["PX"])) == 0
+   and len(achV("bad_days", player_id=pidV["PX"])) == 0,
+   "opponent (all-miss sets, avg 0) earned neither — needs the 10-point swing")
+
+# playoff milestones: OX at 30*4+40+20 = 180 regular points; finish the
+# regular season, then cross 250 during the playoffs
+post_json(f"/api/match/{vm[0]}/complete")
+vst2 = state(vm[1])
+h2v = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+        vst2["match"]["home_team_id"])[0]["id"]
+a2v = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+        vst2["match"]["away_team_id"])[0]["id"]
+v2 = sets_of(vm[1])
+for gi in (0, 1, 2):
+    for si in range(3):
+        sx = v2[gi*3+si]["id"]
+        assign(sx, h2v, a2v)
+        fill(sx, h2v, a2v, ["1"]*10 if si == 0 and gi < 2 else ["M"]*10,
+             ["M"]*10)
+post_json(f"/api/match/{vm[1]}/complete")
+ok(len(achV("warming_up", player_id=pidV["OX"])) == 0,
+   "OX below 250 after the regular season")
+c.post(f"/season/{sidV}/playoffs/create")
+pvm = q("SELECT id FROM matches WHERE season_id=? AND stage='playoff'"
+        " AND completed=0 AND home_team_id IS NOT NULL"
+        " AND away_team_id IS NOT NULL ORDER BY id", sidV)
+pmid = pvm[0]["id"]
+pst = state(pmid)
+ph = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+       pst["match"]["home_team_id"])[0]["id"]
+pa = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+       pst["match"]["away_team_id"])[0]["id"]
+ox_home_p = ph == pidV["OX"]
+psets = sets_of(pmid)
+for gi in (0, 1):
+    for si in range(3):
+        sx = psets[gi*3+si]["id"]
+        assign(sx, ph, pa)
+        scoreset = ["4"]*10 if si == 0 else ["M"]*10  # OX gets 40 per game
+        fill(sx, ph, pa, scoreset if ox_home_p else ["M"]*10,
+             ["M"]*10 if ox_home_p else scoreset)
+wu = achV("warming_up", player_id=pidV["OX"])
+ok(len(wu) == 1, "Warming Up crossed during the playoffs (180 + 80)")
+stg = q("SELECT stage FROM matches WHERE id=?", wu[0]["match_id"])[0]["stage"]
+ok(stg == "playoff", "milestone credited to the playoff match where it crossed")
+c.post(f"/season/{sidV}/delete")
 
 # --- reassign thrower with throws recorded; admin match reset ---
 c.post("/seasons", data={"name": "Swap Season"})
