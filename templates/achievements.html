@@ -36,11 +36,9 @@
       <div class="ach-name">{{ a.name }}
         <span class="ach-scope {{ a.scope }}">{{ 'Personal' if a.scope == 'player' else 'Team' }}</span>
       </div>
-      <div class="ach-who">{{ a.who }}{% if a.who_team %} <span class="muted-small">· {{ a.who_team }}</span>{% endif %}</div>
-      <div class="ach-context muted-small">
-        {% if a.detail %}{{ a.detail }}{% endif %}
-        {% if a.detail and a.context %} — {% endif %}{{ a.context }}
-      </div>
+      <div class="ach-who">{{ a.who }}{% if a.who_team %} <span class="muted-small">· {{ a.who_team }}</span>{% endif %}{% if a.detail %} <span class="muted-small">— {{ a.detail }}</span>{% endif %}</div>
+      <div class="ach-desc">{{ a.desc_long }}</div>
+      {% if a.where %}<div class="ach-where muted-small">{{ a.where }}</div>{% endif %}
     </div>
     <div class="ach-date muted-small">{{ a.earned_at[:16] }}</div>
   </div>

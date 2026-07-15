@@ -53,6 +53,38 @@ DEFS = {
 }
 
 
+LONG_DESC = {
+    "club_50": "Threw an individual set score of 50 points or more.",
+    "club_60": "Threw an individual set score of 60 points or more.",
+    "perfection": "A perfect set: 64 points — two killshots and eight straight bullseyes.",
+    "halfway_there": "Half or more of the throws in a single set were bullseyes.",
+    "hard_way_50": "Scored 50+ in a set with no more than one bullseye — grinding it out point by point.",
+    "nailed_it": "Landed two or more killshots in a single set.",
+    "by_the_numbers": "Scored at least one 1, 2, 3, 4, 5, and a bullseye over the course of the season.",
+    "great_recovery": "Followed a drop immediately with a bullseye.",
+    "phenomenal_recovery": "Followed a drop immediately with a killshot.",
+    "turning_it_around": "Landed three killshots in a set that also included a drop.",
+    "on_fire": "Hit five bullseyes in a row.",
+    "first_blood": "Landed a killshot on the very first throw of a set.",
+    "the_closer": "Started a set with the team down five or more points in the game that clinched the match — and closed it out.",
+    "redemption_arc": "Out-threw an opponent who had beaten them earlier in the season.",
+    "warming_up": "Reached 250 cumulative points across the season.",
+    "splitting_wood": "Reached 500 cumulative points across the season.",
+    "timber": "Reached 1,000 cumulative points across the season.",
+    "suck_less": "Won a match decided by sudden death.",
+    "suck_more": "Lost a match decided by sudden death.",
+    "powers_combined": "Combined for 160 or more points as a team in a single game.",
+    "comeback": "Won the match after losing the first game.",
+    "over_the_hill": "Won enough matches to mathematically guarantee a winning season.",
+    "nail_biter": "Won a match by exactly one point.",
+    "mercy_please": "Won a match by a margin of 50 points or more.",
+    "perfect_storm": "Every set the team threw in one game scored 55 or more.",
+    "giant_toppler": "Beat a team that had a better win-loss record at the time.",
+    "how_did_that_happen": "Won a game without a single bullseye from the whole team.",
+    "try_try_again": "Beat a team that had beaten them earlier in the season.",
+}
+
+
 def ensure_schema():
     conn = sqlite3.connect(dbmod.DB_PATH)
     conn.execute(
@@ -422,23 +454,25 @@ def list_achievements(db, season_id):
     for r in rows:
         name, scope, icon, desc = DEFS.get(
             r["key"], (r["key"], r["scope"], "🏆", ""))
-        ctx = []
-        if r["m_home"] and r["m_away"]:
-            ctx.append(f"{r['m_home']} vs {r['m_away']}")
+        where = []
         if r["m_stage"] == "playoff":
-            ctx.append("Playoffs")
+            where.append("Playoffs")
         elif r["m_week"]:
-            ctx.append(f"Rd {r['m_week']}")
+            where.append(f"Round {r['m_week']}")
         if r["game_number"]:
-            g = f"Game {r['game_number']}"
-            if r["set_number"]:
-                g += f", Set {r['set_number']}"
-            ctx.append(g)
+            where.append(f"Game {r['game_number']}")
+        if r["set_number"]:
+            where.append(f"Set {r['set_number']}")
+        matchup = (f"{r['m_home']} vs {r['m_away']}"
+                   if r["m_home"] and r["m_away"] else None)
+        if matchup:
+            where.append(matchup)
         out.append({
             "key": r["key"], "name": name, "scope": scope, "icon": icon,
-            "desc": desc, "detail": r["detail"], "earned_at": r["earned_at"],
+            "desc": desc, "desc_long": LONG_DESC.get(r["key"], desc),
+            "detail": r["detail"], "earned_at": r["earned_at"],
             "who": r["player_name"] or r["team_name"] or "?",
             "who_team": r["player_team"] if r["player_name"] else None,
-            "context": " · ".join(ctx),
+            "where": " · ".join(where),
         })
     return out

@@ -457,3 +457,7 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .proj-ach-row { display: flex; gap: 10px; align-items: baseline; font-size: 16px; }
 .proj-ach-icon { font-size: 18px; }
 .proj-ach-text strong { color: var(--gold); }
+
+.ach-desc { font-size: 13px; color: var(--ink-dim); margin-top: 3px;
+  font-style: italic; }
+.ach-where { margin-top: 2px; }

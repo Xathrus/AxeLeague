@@ -698,6 +698,14 @@ ok(n_before == n_after and n_after > 0,
 r = c.get(f"/season/{sidA}/achievements")
 ok(r.status_code == 200 and b"Perfection" in r.data and b"Comeback" in r.data,
    "achievements page lists earned achievements")
+ok(b"two killshots and eight straight bullseyes" in r.data,
+   "full description shown on its own line")
+ok(b"Round 1 \xc2\xb7 Game 1 \xc2\xb7 Set 1" in r.data,
+   "Round / Game / Set location line rendered")
+# projector still uses the short description set
+import achievements as _a
+ok(_a.DEFS["perfection"][3] == "A perfect 64 set",
+   "short projector descriptions unchanged")
 ok(b'data-scope="player"' in r.data and b'data-scope="team"' in r.data,
    "achievements page carries scope filters")
 ok(b'<optgroup label="Personal">' in r.data
