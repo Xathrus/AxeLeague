@@ -15,9 +15,16 @@
   </div>
   <select id="ach-who">
     <option value="">Everyone</option>
-    {% for w in rows|map(attribute='who')|unique|sort %}
-    <option value="{{ w }}">{{ w }}</option>
-    {% endfor %}
+    <optgroup label="Personal">
+      {% for w in rows|selectattr('scope', 'equalto', 'player')|map(attribute='who')|unique|sort %}
+      <option value="{{ w }}">{{ w }}</option>
+      {% endfor %}
+    </optgroup>
+    <optgroup label="Team">
+      {% for w in rows|selectattr('scope', 'equalto', 'team')|map(attribute='who')|unique|sort %}
+      <option value="{{ w }}">{{ w }}</option>
+      {% endfor %}
+    </optgroup>
   </select>
 </div>
 

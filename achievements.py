@@ -1,7 +1,9 @@
 """Achievements: automatic detection, storage, and recomputation.
 
-Detection is a full, deterministic recompute per season, run after any scoring
-mutation. Each occurrence has a stable `uniq` identity, so recomputing is
+Every achievement is earned once per player/team per season — the first
+time the criteria are met (detection walks the season in chronological order,
+so "first" is the earliest qualifying moment). Detection is a full,
+deterministic recompute per season, run after any scoring mutation. Each occurrence has a stable `uniq` identity, so recomputing is
 idempotent: new facts are inserted, facts that no longer hold (a corrected
 throw, a reset match) are revoked, and rows that still hold keep their
 original earned_at.
@@ -134,9 +136,14 @@ def _side_stats(side):
 def _detect(db, season_id):
     teams, matches = _load(db, season_id)
     facts = []
+    awarded = set()  # (key, subject) — every achievement is once per season
 
     def add(key, uniq, player_id=None, team_id=None, match_id=None,
             gn=None, sn=None, detail=None):
+        subject = ("p", player_id) if player_id else ("t", team_id)
+        if (key, subject) in awarded:
+            return
+        awarded.add((key, subject))
         facts.append({"key": key, "uniq": uniq, "player_id": player_id,
                       "team_id": team_id, "match_id": match_id,
                       "game_number": gn, "set_number": sn, "detail": detail})

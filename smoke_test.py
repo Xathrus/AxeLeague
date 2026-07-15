@@ -578,6 +578,12 @@ ok(len(achq("hard_way_50", player_id=p1)) == 0,
    "64 set (8 bulls) does not earn 50 The Hard Way")
 ok(len(achq("by_the_numbers", player_id=p2)) == 1,
    "By the Numbers is one-time per season")
+ok(len(achq("club_50", player_id=p1)) == 1
+   and len(achq("club_60", player_id=p1)) == 1,
+   "Club 50/60 earned once despite multiple qualifying sets")
+first50 = achq("club_50", player_id=p1)[0]
+ok(first50["game_number"] == 1 and first50["set_number"] == 1,
+   "the recorded occurrence is the FIRST qualifying set")
 
 # team: Powers Combined (64+21+30=115 no; craft in G2) & Perfect Storm
 fillA(hset(3), HH(1), DD(1), ["B"]*10, ["M"]*10)   # 60
@@ -622,8 +628,8 @@ home_team2 = st2["match"]["home_team_id"]
 # margin: home 41, away 30 -> 11. Not nail biter; comeback yes.
 ok(len(achq("comeback", team_id=home_team2, match_id=am2)) == 1,
    "Comeback (won after losing game 1)")
-ok(len(achq("how_did_that_happen", team_id=home_team2)) >= 2,
-   "How did that happen? (bullseye-free game wins)")
+ok(len(achq("how_did_that_happen", team_id=home_team2)) == 1,
+   "How did that happen? earned once despite multiple qualifying games")
 # Over the Hill: home_team2... whichever team now has >N/2 wins
 n_sched = q("SELECT COUNT(*) n FROM matches WHERE season_id=? AND stage='regular'"
             " AND (home_team_id=? OR away_team_id=?)",
@@ -694,6 +700,12 @@ ok(r.status_code == 200 and b"Perfection" in r.data and b"Comeback" in r.data,
    "achievements page lists earned achievements")
 ok(b'data-scope="player"' in r.data and b'data-scope="team"' in r.data,
    "achievements page carries scope filters")
+ok(b'<optgroup label="Personal">' in r.data
+   and b'<optgroup label="Team">' in r.data,
+   "who-filter dropdown split into Personal and Team sections")
+ok(r.data.index(b'<optgroup label="Personal">')
+   < r.data.index(b'<optgroup label="Team">'),
+   "Personal section listed before Team")
 ok(b"Achievements" in c.get(f"/season/{sidA}").data,
    "Achievements tab in season nav")
 # viewers can browse
