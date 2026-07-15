@@ -36,7 +36,7 @@ DEFS = {
     "first_blood":    ("First Blood", "player", "🗡️", "Killshot on a set's first throw"),
     "the_closer":     ("The Closer", "player", "🧊", "Clinch the match from 5+ down"),
     "hope_not_fluke": ("Hope that Isn't a Fluke", "player", "🍀", "Beat your average by 10+"),
-    "bad_days":       ("Everyone Had Bad Days", "player", "📉", "Fall 10+ below your average"),
+    "bad_days":       ("Everyone Has Bad Days", "player", "📉", "Fall 10+ below your average"),
     "warming_up":     ("Warming Up", "player", "🌡️", "Reach 250 season points"),
     "splitting_wood": ("Splitting Wood", "player", "🪵", "Reach 500 season points"),
     "timber":         ("TIMBER!", "player", "🌲", "Reach 1000 season points"),

@@ -780,7 +780,7 @@ ok(len(fl) == 1, "Hope that Isn't a Fluke earned (40 vs 30 average)")
 ok(fl[0]["game_number"] == 2 and fl[0]["set_number"] == 2,
    "fluke credited to the 5th set thrown")
 bd = achV("bad_days", player_id=pidV["OX"])
-ok(len(bd) == 1, "Everyone Had Bad Days earned (20 vs 32 average)")
+ok(len(bd) == 1, "Everyone Has Bad Days earned (20 vs 32 average)")
 ok(len(achV("hope_not_fluke", player_id=pidV["PX"])) == 0
    and len(achV("bad_days", player_id=pidV["PX"])) == 0,
    "opponent (all-miss sets, avg 0) earned neither — needs the 10-point swing")
