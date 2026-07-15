@@ -8,6 +8,7 @@ import bracket as bracket_mod
 import branding as branding_mod
 import csv_import
 import season_io
+import achievements as ach
 import scoring
 import stats as stats_mod
 from auth import admin_required, scorekeeper_required
@@ -16,8 +17,14 @@ from db import get_db, init_db
 app = Flask(__name__)
 init_db(app)
 auth.ensure_schema()
+ach.ensure_schema()
 app.secret_key = auth.load_secret_key()
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # logo uploads
+
+with app.app_context():
+    _d = get_db()
+    ach.backfill(_d)
+    _d.commit()
 
 
 # ---------------------------------------------------------------- auth gate
@@ -262,6 +269,7 @@ def import_season():
     try:
         data = season_io.loads(f.read())
         sid = season_io.import_season(db, data)
+        ach.recompute(db, sid)
     except season_io.SeasonImportError as e:
         db.rollback()
         return redirect(url_for("index", e=str(e)))
@@ -300,6 +308,7 @@ def reset_schedule(season_id):
     _season_or_404(season_id)
     db = get_db()
     db.execute("DELETE FROM matches WHERE season_id=?", (season_id,))
+    ach.recompute(db, season_id)
     db.commit()
     return redirect(url_for("schedule_page", season_id=season_id))
 
@@ -675,6 +684,7 @@ def create_playoffs(season_id):
         seeds = [r["team_id"] for r in stats_mod.standings(db, season_id)]
         try:
             bracket_mod.create_bracket(db, season_id, seeds)
+            ach.recompute(db, season_id)
             db.commit()
         except ValueError:
             db.rollback()
@@ -688,6 +698,7 @@ def reset_playoffs(season_id):
     db = get_db()
     db.execute("DELETE FROM matches WHERE season_id=? AND stage='playoff'",
                (season_id,))
+    ach.recompute(db, season_id)
     db.commit()
     return redirect(url_for("playoffs_page", season_id=season_id))
 
@@ -715,6 +726,7 @@ def import_match_csv(match_id):
     except csv_import.ImportError_ as e:
         return redirect(url_for("match_page", match_id=match_id, e=str(e)))
     summary = csv_import.apply(db, m, parsed)
+    ach.recompute(db, m["season_id"])
     db.commit()
     msg = (f"Imported {summary['throws']} throws across "
            f"{summary['sets']} set entries.")
@@ -722,6 +734,27 @@ def import_match_csv(match_id):
         msg += " New players added: " + ", ".join(
             sorted(set(summary["created_players"]))) + "."
     return redirect(url_for("match_page", match_id=match_id, m=msg))
+
+
+def _season_of_match(db, match_id):
+    r = db.execute("SELECT season_id FROM matches WHERE id=?",
+                   (match_id,)).fetchone()
+    return r["season_id"] if r else None
+
+
+def _season_of_set(db, set_id):
+    r = db.execute(
+        """SELECT m.season_id AS sid FROM sets s
+           JOIN games g ON g.id=s.game_id JOIN matches m ON m.id=g.match_id
+           WHERE s.id=?""", (set_id,)).fetchone()
+    return r["sid"] if r else None
+
+
+@app.route("/season/<int:season_id>/achievements")
+def achievements_page(season_id):
+    s = _season_or_404(season_id)
+    rows = ach.list_achievements(get_db(), season_id)
+    return render_template("achievements.html", season=s, rows=rows)
 
 
 @app.route("/projector")
@@ -798,7 +831,17 @@ def api_projector():
                       "losses": r["losses"], "bulls": r["bulls"]}
                      for r in rows_],
         }
-    return jsonify({"boards": boards, "standings": standings})
+    recent = None
+    if boards:
+        sid_lead = db.execute("SELECT season_id FROM matches WHERE id=?",
+                              (boards[0]["match_id"],)).fetchone()["season_id"]
+        recent = [
+            {"icon": a["icon"], "name": a["name"], "who": a["who"],
+             "who_team": a["who_team"], "detail": a["detail"]}
+            for a in ach.list_achievements(db, sid_lead)[:5]
+        ]
+    return jsonify({"boards": boards, "standings": standings,
+                    "achievements": recent})
 
 
 @app.post("/match/<int:match_id>/reset")
@@ -822,6 +865,7 @@ def reset_match(match_id):
                f" WHERE id IN ({qmarks})", set_ids)
     db.execute("""UPDATE matches SET completed=0, winner_team_id=NULL,
                   sudden_death_winner_team_id=NULL WHERE id=?""", (match_id,))
+    ach.recompute(db, m["season_id"])
     db.commit()
     return redirect(url_for("match_page", match_id=match_id,
                             m="Match reset — all scores and thrower "
@@ -884,6 +928,7 @@ def api_assign(set_id):
                         "UPDATE throws SET player_id=? WHERE set_id=?"
                         " AND player_id=?", (pid, set_id, current))
             db.execute(f"UPDATE sets SET {field}=? WHERE id=?", (pid, set_id))
+    ach.recompute(db, _season_of_set(db, set_id))
     db.commit()
     return jsonify({"ok": True})
 
@@ -919,6 +964,7 @@ def api_throw(set_id):
             "INSERT INTO throws (set_id, player_id, throw_number, outcome, points)"
             " VALUES (?,?,?,?,?)",
             (set_id, pid, len(seq) + 1, outcome, scoring.OUTCOME_POINTS[outcome]))
+        ach.recompute(db, _season_of_set(db, set_id))
         db.commit()
     except sqlite3.IntegrityError:
         db.rollback()
@@ -944,6 +990,7 @@ def api_undo(set_id):
     if not last:
         return _err("Nothing to undo.")
     db.execute("DELETE FROM throws WHERE id=?", (last["id"],))
+    ach.recompute(db, _season_of_set(db, set_id))
     db.commit()
     return jsonify({"ok": True})
 
@@ -972,6 +1019,9 @@ def api_edit_throw(throw_id):
                     "(2 per set, +1 per drop).")
     db.execute("UPDATE throws SET outcome=?, points=? WHERE id=?",
                (outcome, scoring.OUTCOME_POINTS[outcome], throw_id))
+    _sid_row = db.execute("""SELECT m.season_id AS sid FROM throws t JOIN sets s ON s.id=t.set_id JOIN games g ON g.id=s.game_id JOIN matches m ON m.id=g.match_id WHERE t.id=?""", (throw_id,)).fetchone()
+    if _sid_row:
+        ach.recompute(db, _sid_row["sid"])
     db.commit()
     return jsonify({"ok": True})
 
@@ -992,6 +1042,7 @@ def api_sudden_death(match_id):
         return _err("Winner must be one of the two teams.")
     db.execute("UPDATE matches SET sudden_death_winner_team_id=? WHERE id=?",
                (winner, match_id))
+    ach.recompute(db, _season_of_match(db, match_id))
     db.commit()
     return jsonify({"ok": True})
 
@@ -1013,6 +1064,7 @@ def api_complete(match_id):
     if m["stage"] == "playoff":
         bracket_mod.apply_advancement(db, m, winner)
         bracket_mod.propagate(db, m["season_id"])
+    ach.recompute(db, _season_of_match(db, match_id))
     db.commit()
     return jsonify({"ok": True})
 
@@ -1031,6 +1083,7 @@ def api_reopen(match_id):
     db.execute(
         "UPDATE matches SET completed=0, winner_team_id=NULL,"
         " sudden_death_winner_team_id=NULL WHERE id=?", (match_id,))
+    ach.recompute(db, _season_of_match(db, match_id))
     db.commit()
     return jsonify({"ok": True})
 

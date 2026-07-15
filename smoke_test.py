@@ -516,6 +516,203 @@ ok(any(jul4["key"] in p["weeks"] for p in wrows),
 r = c.get(f"/season/{season_id}/stats")
 ok(b"Weekly Average" in r.data, "stats page shows Weekly Average section")
 
+# --- achievements ---
+import achievements as achmod
+c.post("/seasons", data={"name": "Ach Season"})
+sidA = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Hawks", "Doves"):
+    c.post(f"/season/{sidA}/teams", data={"name": t})
+tidA = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidA)}
+for nm, tm in (("H1", "Hawks"), ("H2", "Hawks"), ("H3", "Hawks"),
+               ("D1", "Doves"), ("D2", "Doves"), ("D3", "Doves")):
+    c.post(f"/team/{tidA[tm]}/players", data={"name": nm})
+pidA = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidA)}
+c.post(f"/season/{sidA}/schedule/generate")
+amatches = [r["id"] for r in q(
+    "SELECT id FROM matches WHERE season_id=? ORDER BY id", sidA)]
+am1 = amatches[0]
+ast = state(am1)
+hawks_home = ast["match"]["home_team_id"] == tidA["Hawks"]
+
+def hset(i):  # set id by play order in match am1
+    return sets_of(am1)[i]["id"]
+
+def fillA(sid_, hp, ap, ho, ao):
+    assign(sid_, hp, ap)
+    fill(sid_, hp, ap, ho, ao)
+
+HH = lambda n: pidA[f"H{n}"] if hawks_home else pidA[f"D{n}"]
+DD = lambda n: pidA[f"D{n}"] if hawks_home else pidA[f"H{n}"]
+def achq(key, **kw):
+    conds, args = ["season_id=?", "key=?"], [sidA, key]
+    for col, v in kw.items():
+        conds.append(f"{col}=?"); args.append(v)
+    return q("SELECT * FROM achievements WHERE " + " AND ".join(conds), *args)
+
+# Game 1: H1 throws a perfect 64 (KH,KH,B*8); D1 answers 5*10 (Hard Way 50)
+fillA(hset(0), HH(1), DD(1), ["KH","KH"]+["B"]*8, ["5"]*10)
+# G1S2: By the Numbers (1..5+B) + recoveries + turning it around
+fillA(hset(1), HH(2), DD(2),
+      ["1","2","3","4","5","B","D","B","D","KH"],   # great + phenomenal recovery
+      ["KH","KH","D","KH","1","1","1","1","1","1"])  # 3 KH + a drop
+# G1S3: quiet
+fillA(hset(2), HH(3), DD(3), ["3"]*10, ["M"]*10)
+
+p1 = HH(1); p2 = HH(2); d2 = DD(2)
+for key, pid_, msg in (
+    ("club_50", p1, "Club 50"), ("club_60", p1, "Club 60"),
+    ("perfection", p1, "Perfection"), ("halfway_there", p1, "Halfway There"),
+    ("nailed_it", p1, "Nailed It (2 KH)"), ("first_blood", p1, "First Blood"),
+    ("on_fire", p1, "On Fire (5 straight bulls)"),
+    ("hard_way_50", DD(1), "50 The Hard Way"),
+    ("by_the_numbers", p2, "By the Numbers"),
+    ("great_recovery", p2, "Great Recovery"),
+    ("phenomenal_recovery", p2, "Phenomenal Recovery"),
+    ("turning_it_around", d2, "Turning it Around"),
+):
+    ok(len(achq(key, player_id=pid_)) >= 1, f"achievement: {msg}")
+ok(len(achq("hard_way_50", player_id=p1)) == 0,
+   "64 set (8 bulls) does not earn 50 The Hard Way")
+ok(len(achq("by_the_numbers", player_id=p2)) == 1,
+   "By the Numbers is one-time per season")
+
+# team: Powers Combined (64+21+30=115 no; craft in G2) & Perfect Storm
+fillA(hset(3), HH(1), DD(1), ["B"]*10, ["M"]*10)   # 60
+fillA(hset(4), HH(2), DD(2), ["B"]*10, ["M"]*10)   # 60
+fillA(hset(5), HH(3), DD(3), ["B"]*10, ["M"]*10)   # 60 => 180 combined
+hawks_side_team = tidA["Hawks"]
+ok(len(achq("powers_combined", team_id=hawks_side_team, game_number=2)) == 1,
+   "By Our Powers Combined (180 in game 2)")
+ok(len(achq("perfect_storm", team_id=hawks_side_team, game_number=2)) == 1,
+   "Perfect Storm (three 55+ sets)")
+# G3 tie -> Hawks won G1+G2 -> complete; margin big -> Mercy Please
+for i in (6, 7, 8):
+    fillA(hset(i), HH(1), DD(1), ["M"]*10, ["M"]*10)
+post_json(f"/api/match/{am1}/complete")
+ok(len(achq("mercy_please", team_id=hawks_side_team, match_id=am1)) == 1,
+   "Mercy Please (50+ margin)")
+ok(len(achq("how_did_that_happen")) == 0,
+   "no bullseye-free game win yet (Hawks bulled everywhere)")
+
+# match 2: Doves win G1, Hawks G2+G3 -> Comeback; and margin exactly 1
+am2 = amatches[1]
+st2 = state(am2)
+h2 = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+       st2["match"]["home_team_id"])[0]["id"]
+a2 = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+       st2["match"]["away_team_id"])[0]["id"]
+s2 = sets_of(am2)
+def fill2(i, ho, ao):
+    assign(s2[i]["id"], h2, a2)
+    fill(s2[i]["id"], h2, a2, ho, ao)
+fill2(0, ["1"]*10, ["2"]*10)   # G1: away 20, home 10 -> away wins G1
+fill2(1, ["M"]*10, ["M"]*10)
+fill2(2, ["M"]*10, ["M"]*10)
+fill2(3, ["3"]*10, ["1"]*10)   # G2 home 30-10
+fill2(4, ["M"]*10, ["M"]*10)
+fill2(5, ["M"]*10, ["M"]*10)
+fill2(6, ["1","M","M","M","M","M","M","M","M","M"], ["M"]*10)  # G3 home 1-0
+fill2(7, ["M"]*10, ["M"]*10)
+fill2(8, ["M"]*10, ["M"]*10)
+post_json(f"/api/match/{am2}/complete")
+home_team2 = st2["match"]["home_team_id"]
+# margin: home 41, away 30 -> 11. Not nail biter; comeback yes.
+ok(len(achq("comeback", team_id=home_team2, match_id=am2)) == 1,
+   "Comeback (won after losing game 1)")
+ok(len(achq("how_did_that_happen", team_id=home_team2)) >= 2,
+   "How did that happen? (bullseye-free game wins)")
+# Over the Hill: home_team2... whichever team now has >N/2 wins
+n_sched = q("SELECT COUNT(*) n FROM matches WHERE season_id=? AND stage='regular'"
+            " AND (home_team_id=? OR away_team_id=?)",
+            sidA, tidA["Hawks"], tidA["Hawks"])[0]["n"]
+hawk_wins = q("SELECT COUNT(*) n FROM matches WHERE season_id=?"
+              " AND winner_team_id=?", sidA, tidA["Hawks"])[0]["n"]
+if 2 * hawk_wins > n_sched:
+    ok(len(achq("over_the_hill", team_id=tidA["Hawks"])) == 1,
+       "Over the Hill fired once when clinched")
+
+# Redemption Arc + If at first + Giant Toppler: match 2 IS the rematch —
+# Doves (0-1) beat Hawks (1-0), and D1 beat H1 in G2S1 after losing in match 1
+doves_team = tidA["Doves"]
+ok(len(achq("redemption_arc", player_id=pidA["D1"])) >= 1,
+   "Redemption Arc (D1 beat H1 after losing to him in match 1)")
+ok(len(achq("try_try_again", team_id=doves_team, match_id=am2)) == 1,
+   "If at first you don't succeed (Doves rematch win)")
+ok(len(achq("giant_toppler", team_id=doves_team, match_id=am2)) == 1,
+   "Giant Toppler (Doves were 0-1 vs Hawks 1-0)")
+
+# milestones: H1 has 64+0(g1s3? no)+60+... cumulative check via engine order
+h1_pts = q("""SELECT COALESCE(SUM(t.points),0) p FROM throws t
+              JOIN sets s ON s.id=t.set_id JOIN games g ON g.id=s.game_id
+              JOIN matches m ON m.id=g.match_id
+              WHERE m.season_id=? AND t.player_id=? AND m.stage='regular'""",
+           sidA, pidA["H1" if True else ""])[0]["p"]
+if h1_pts >= 250:
+    ok(len(achq("warming_up", player_id=pidA["H1"])) == 1,
+       f"Warming Up milestone (H1 at {h1_pts})")
+
+# revocation: turn H1's perfect 64 into 63 -> Perfection revoked, Club stays
+t64 = q("""SELECT t.id FROM throws t JOIN sets s ON s.id=t.set_id
+           WHERE s.id=? AND t.player_id=? AND t.throw_number=10""",
+        hset(0), p1)[0]["id"]
+ok(post_json(f"/api/match/{am1}/reopen").status_code == 200,
+   "reopen match 1 to correct a throw")
+r = post_json(f"/api/throw/{t64}/edit", {"outcome": "5"})
+ok(r.status_code == 200, "correction edit accepted")
+ok(len(achq("perfection", player_id=p1)) == 0,
+   "Perfection revoked after the throw was corrected")
+ok(len(achq("club_60", player_id=p1)) >= 1, "Club 60 survives (63 still 60+)")
+r = post_json(f"/api/throw/{t64}/edit", {"outcome": "B"})
+ok(r.status_code == 200, "re-edit accepted")
+ok(len(achq("perfection", player_id=p1)) == 1, "Perfection restored on re-edit")
+post_json(f"/api/match/{am1}/complete")
+
+# sudden death achievements (from the main season's SD match)
+ok(q("SELECT COUNT(*) n FROM achievements WHERE season_id=? AND key='suck_less'",
+     season_id)[0]["n"] == 1, "We Suck Less (sudden death win)")
+ok(q("SELECT COUNT(*) n FROM achievements WHERE season_id=? AND key='suck_more'",
+     season_id)[0]["n"] == 1, "We Suck More (sudden death loss)")
+
+# backfill: wipe and restore via the startup path
+n_before = q("SELECT COUNT(*) n FROM achievements WHERE season_id=?", sidA)[0]["n"]
+with app.app_context():
+    d = db.get_db()
+    d.execute("DELETE FROM achievements WHERE season_id=?", (sidA,))
+    d.commit()
+    achmod.backfill(d)
+    d.commit()
+n_after = q("SELECT COUNT(*) n FROM achievements WHERE season_id=?", sidA)[0]["n"]
+ok(n_before == n_after and n_after > 0,
+   f"startup backfill regenerates achievements ({n_after})")
+
+# page + filters + nav
+r = c.get(f"/season/{sidA}/achievements")
+ok(r.status_code == 200 and b"Perfection" in r.data and b"Comeback" in r.data,
+   "achievements page lists earned achievements")
+ok(b'data-scope="player"' in r.data and b'data-scope="team"' in r.data,
+   "achievements page carries scope filters")
+ok(b"Achievements" in c.get(f"/season/{sidA}").data,
+   "Achievements tab in season nav")
+# viewers can browse
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+ok(c.get(f"/season/{sidA}/achievements").status_code == 200,
+   "viewer can browse achievements")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+
+# projector carries recent achievements while this season is active
+post_json(f"/api/match/{am1}/reopen")
+g3s3 = hset(8)
+post_json(f"/api/set/{g3s3}/undo", {"player_id": HH(1)})  # make room
+throw(g3s3, HH(1), "B")
+pj = c.get("/api/projector").get_json()
+ok(pj["achievements"] and len(pj["achievements"]) <= 5
+   and all("icon" in a and "name" in a for a in pj["achievements"]),
+   "projector includes up to 5 recent achievements")
+c.post(f"/season/{sidA}/delete")
+
 # --- reassign thrower with throws recorded; admin match reset ---
 c.post("/seasons", data={"name": "Swap Season"})
 sidS = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

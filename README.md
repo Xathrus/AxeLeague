@@ -21,6 +21,7 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Multi-scorekeeper** — several browsers can score simultaneously; screens stay in sync (3-second polling)
 - **CSV score import** — admin can upload a CSV on any match page to import its scores in one shot (replaces anything already recorded). Columns: `Game, Set, Thrower, Team, Throw 1 … Throw 10`; values 1-5, 6 = bullseye, 8 = killshot hit, or Miss / Drop / Kill Miss / Kill Drop; unknown throwers are added to the roster automatically. See `SampleMatch.csv`
 - **Short rosters** — the same player may throw multiple sets in a game
+- **Achievements** — 28 personal and team achievements (Club 50/60, Perfection, On Fire, First Blood, The Closer, Redemption Arc, season milestones, Comeback, Nail Biter, Mercy Please, Perfect Storm, Giant Toppler, and more) detected automatically as scores come in — no admin action needed. Existing data is backfilled on first start, and corrections (edits, undos, resets) revoke achievements that no longer hold. Dedicated Achievements page per season with Personal/Team and per-player filters; the projector shows the five most recent
 - **Stats** — regular season and playoffs tracked in separate sections; League Overview cards (regular-season league average, drop rate, bullseye ratio, high score, highest average, record holders) plus Weekly High Score cards per round date; every stats table sorts by clicking a column header; per player per season (avg/set, high, low, 50+%, bullseyes, bullseye %, drops, drop %, KS attempts, kill %). Bullseye percentages exclude killshot attempts, since a killshot can't score a bullseye, Weekly Averages grouped by round dates, per team per season
 - **Standings** — W-L record, tiebroken by total bullseyes
 - **Playoffs** — double elimination bracket seeded by standings, byes auto-resolved, grand final reset match if the lower-bracket team wins GF1
@@ -34,6 +35,7 @@ branding.py       Venue logo + color scheme storage
 scoring.py        Rules engine: outcomes, points, KS call logic, match state
 bracket.py        Round robin scheduler + double elimination bracket
 stats.py          Player/team stats and standings
+achievements.py   Achievement definitions, detection, recompute
 db.py             SQLite connection helpers
 schema.sql        Database schema
 templates/        Jinja2 pages

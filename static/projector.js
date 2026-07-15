@@ -75,6 +75,25 @@
     return card;
   }
 
+  function achievementsCard(list) {
+    const card = el("div", "proj-standings proj-ach");
+    card.appendChild(el("div", "proj-current-label", "RECENT ACHIEVEMENTS"));
+    const grid = el("div", "proj-ach-grid");
+    list.forEach(a => {
+      const line = el("div", "proj-ach-row");
+      line.appendChild(el("span", "proj-ach-icon", a.icon));
+      const txt = el("span", "proj-ach-text");
+      txt.appendChild(el("strong", "", a.name));
+      const whoBits = a.who + (a.who_team ? " (" + a.who_team + ")" : "");
+      txt.appendChild(document.createTextNode(" — " + whoBits
+        + (a.detail ? " · " + a.detail : "")));
+      line.appendChild(txt);
+      grid.appendChild(line);
+    });
+    card.appendChild(grid);
+    return card;
+  }
+
   function standingsCard(st) {
     const card = el("div", "proj-standings");
     card.appendChild(el("div", "proj-current-label",
@@ -129,6 +148,9 @@
           root.appendChild(board(byId[id]));
         }
       });
+      if (data.achievements && data.achievements.length) {
+        root.appendChild(achievementsCard(data.achievements));
+      }
       if (data.standings && data.standings.rows.length) {
         root.appendChild(standingsCard(data.standings));
       }

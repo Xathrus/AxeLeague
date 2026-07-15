@@ -428,3 +428,32 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 .proj-card.proj-empty { display: flex; align-items: center; justify-content: center;
   color: var(--ink-dim); font-size: 16px; min-height: 220px;
   border-style: dashed; background: transparent; }
+
+/* ---------------- achievements ---------------- */
+.ach-filters { display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ach-tabs { display: flex; gap: 6px; }
+.ach-tab { background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 999px; padding: 5px 14px; cursor: pointer; font-size: 13px; }
+.ach-tab.active { border-color: var(--gold); color: var(--gold); }
+#ach-who { background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 8px; padding: 5px 8px; }
+.ach-list { display: flex; flex-direction: column; gap: 8px; }
+.ach-row { display: grid; grid-template-columns: 44px minmax(0,1fr) auto;
+  gap: 12px; align-items: center; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.ach-icon { font-size: 26px; text-align: center; }
+.ach-name { font-weight: 800; }
+.ach-scope { font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px;
+  margin-left: 8px; color: var(--ink-dim); vertical-align: middle; }
+.ach-scope.player { border-color: var(--gold); color: var(--gold); }
+.ach-scope.team { border-color: var(--green); color: var(--green); }
+.ach-who { font-size: 14px; }
+.ach-date { white-space: nowrap; }
+
+/* projector achievements ticker */
+.proj-ach-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.proj-ach-row { display: flex; gap: 10px; align-items: baseline; font-size: 16px; }
+.proj-ach-icon { font-size: 18px; }
+.proj-ach-text strong { color: var(--gold); }
