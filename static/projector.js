@@ -33,7 +33,7 @@
   }
 
   function board(b) {
-    const card = el("div", "proj-card");
+    const card = el("div", "proj-card" + (b.completed ? " proj-done" : ""));
     const stage = b.stage === "playoff" ? " · PLAYOFFS" : "";
     card.appendChild(el("div", "proj-season", b.season.toUpperCase() + stage));
 
@@ -55,7 +55,14 @@
     });
     card.appendChild(games);
 
-    if (b.status === "sudden_death") {
+    if (b.completed) {
+      const fin = el("div", "proj-final");
+      fin.appendChild(el("span", "proj-final-badge", "FINAL"));
+      fin.appendChild(el("span", "",
+        (b.winner_name ? b.winner_name + " win" : "Complete")
+        + (b.sudden_death ? " · sudden death" : "")));
+      card.appendChild(fin);
+    } else if (b.status === "sudden_death") {
       card.appendChild(el("div", "proj-sd", "SUDDEN DEATH"));
     } else {
       const cur = el("div", "proj-current");

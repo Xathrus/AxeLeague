@@ -52,6 +52,9 @@ r = c.post("/setup", data={"admin_password": "adminpw", "admin_password2": "admi
 ok(r.status_code in (302, 303), "setup creates users and signs in")
 r = c.get("/setup", follow_redirects=False)
 ok(r.status_code in (302, 303), "setup unavailable once done")
+pj0 = c.get("/api/projector").get_json()
+ok(pj0["boards"] == [] and pj0["standings"] is None,
+   "projector empty on a fresh install")
 
 c.post("/logout")
 r = c.get("/", follow_redirects=False)
@@ -918,9 +921,9 @@ pmids = [r["id"] for r in q(
     "SELECT id FROM matches WHERE season_id=? ORDER BY id LIMIT 5", sidP)]
 
 r = c.get("/api/projector")
-ok(r.status_code == 200 and r.get_json()["boards"] == []
-   and r.get_json()["standings"] is None,
-   "projector empty (no boards, no standings) when nothing active")
+pjx = r.get_json()
+ok(r.status_code == 200 and all(b["completed"] for b in pjx["boards"]),
+   "before scoring starts, only lingering finals (from other seasons) show")
 
 def start_scoring(mid, n_throws=3):
     stx = state(mid)
@@ -988,8 +991,18 @@ def finish(mid):
 
 finish(pmids[0])
 data = c.get("/api/projector").get_json()
+b0f = [b for b in data["boards"] if b["match_id"] == pmids[0]]
+ok(len(b0f) == 1, "completed match stays on the projector")
+ok(b0f[0]["completed"] is True and b0f[0]["winner_name"],
+   "lingering card carries FINAL flag and winner name")
+# natural replacement: three other matches score after it -> it rotates off
+for mid_ in (pmids[1], pmids[2], pmids[4]):
+    start_scoring(mid_, n_throws=1)
+data = c.get("/api/projector").get_json()
 ok(pmids[0] not in [b["match_id"] for b in data["boards"]],
-   "completed match leaves the projector")
+   "completed match naturally replaced by fresher scoring")
+ok(all(b["completed"] is False for b in data["boards"]),
+   "active boards flagged not-completed")
 
 r = c.get("/projector")
 ok(r.status_code == 200 and b"projector.js" in r.data, "projector page renders")

@@ -771,7 +771,6 @@ def api_projector():
            JOIN sets s ON s.id = t.set_id
            JOIN games g ON g.id = s.game_id
            JOIN matches m ON m.id = g.match_id
-           WHERE m.completed = 0
            GROUP BY g.match_id
            ORDER BY last_throw DESC
            LIMIT 3""").fetchall()
@@ -797,8 +796,16 @@ def api_projector():
             g = games[-1]
             cur = (g, g["sets"][-1])
         cg, cs = cur
+        wid = state["status"].get("winner_team_id")
+        winner_name = (state["match"]["home_team_name"]
+                       if wid == m["home_team_id"]
+                       else state["match"]["away_team_name"]
+                       if wid == m["away_team_id"] else None)
         boards.append({
             "match_id": m["id"],
+            "completed": bool(m["completed"]),
+            "winner_name": winner_name,
+            "sudden_death": bool(m["sudden_death_winner_team_id"]),
             "season": season["name"] if season else "",
             "stage": m["stage"],
             "home_name": state["match"]["home_team_name"],
