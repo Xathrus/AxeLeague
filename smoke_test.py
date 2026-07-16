@@ -52,9 +52,9 @@ r = c.post("/setup", data={"admin_password": "adminpw", "admin_password2": "admi
 ok(r.status_code in (302, 303), "setup creates users and signs in")
 r = c.get("/setup", follow_redirects=False)
 ok(r.status_code in (302, 303), "setup unavailable once done")
-pj0 = c.get("/api/projector").get_json()
-ok(pj0["boards"] == [] and pj0["standings"] is None,
-   "projector empty on a fresh install")
+r = c.get("/projector", follow_redirects=False)
+ok(r.status_code in (302, 303) and r.headers["Location"].endswith("/"),
+   "topbar projector link falls back to home on a fresh install")
 
 c.post("/logout")
 r = c.get("/", follow_redirects=False)
@@ -730,7 +730,7 @@ post_json(f"/api/match/{am1}/reopen")
 g3s3 = hset(8)
 post_json(f"/api/set/{g3s3}/undo", {"player_id": HH(1)})  # make room
 throw(g3s3, HH(1), "B")
-pj = c.get("/api/projector").get_json()
+pj = c.get(f"/api/season/{sidA}/projector").get_json()
 ok(pj["achievements"] and len(pj["achievements"]) <= 5
    and all("icon" in a and "name" in a and "desc" in a
            and "detail" not in a for a in pj["achievements"]),
@@ -920,10 +920,12 @@ c.post(f"/season/{sidP}/schedule/generate")
 pmids = [r["id"] for r in q(
     "SELECT id FROM matches WHERE season_id=? ORDER BY id LIMIT 5", sidP)]
 
-r = c.get("/api/projector")
+r = c.get(f"/api/season/{sidP}/projector")
 pjx = r.get_json()
-ok(r.status_code == 200 and all(b["completed"] for b in pjx["boards"]),
-   "before scoring starts, only lingering finals (from other seasons) show")
+ok(r.status_code == 200 and pjx["boards"] == [],
+   "season projector empty before this season's scoring starts")
+ok(pjx["standings"] and len(pjx["standings"]["rows"]) == 4,
+   "standings shown for the season even while idle")
 
 def start_scoring(mid, n_throws=3):
     stx = state(mid)
@@ -940,7 +942,7 @@ def start_scoring(mid, n_throws=3):
 for mid in pmids[:4]:
     start_scoring(mid)
 
-data = c.get("/api/projector").get_json()
+data = c.get(f"/api/season/{sidP}/projector").get_json()
 ok(len(data["boards"]) == 3, "projector caps at 3 boards")
 ok(data["boards"][0]["match_id"] == pmids[3],
    "most recently scored match leads")
@@ -954,7 +956,7 @@ ok(b0["current"]["home_throws"] == ["3", "3", "3"]
 ok(b0["wins"] == {"home": 0, "away": 0}, "game wins present")
 stnds = data["standings"]
 ok(stnds and stnds["season"] == "Proj Season",
-   "projector includes standings for the season being scored")
+   "projector standings belong to this season")
 ok(len(stnds["rows"]) == 4 and all(
    set(r) == {"team", "wins", "losses", "bulls"} for r in stnds["rows"]),
    "standings rows carry team, record, and bullseyes")
@@ -965,7 +967,7 @@ hp0 = q("""SELECT s.home_player_id p FROM sets s JOIN games g ON g.id=s.game_id
         pmids[0])[0]["p"]
 s00 = sets_of(pmids[0])[0]["id"]
 throw(s00, hp0, "5")
-data = c.get("/api/projector").get_json()
+data = c.get(f"/api/season/{sidP}/projector").get_json()
 ok(data["boards"][0]["match_id"] == pmids[0],
    "new throw moves match to the front")
 
@@ -990,7 +992,7 @@ def finish(mid):
     post_json(f"/api/match/{mid}/complete")
 
 finish(pmids[0])
-data = c.get("/api/projector").get_json()
+data = c.get(f"/api/season/{sidP}/projector").get_json()
 b0f = [b for b in data["boards"] if b["match_id"] == pmids[0]]
 ok(len(b0f) == 1, "completed match stays on the projector")
 ok(b0f[0]["completed"] is True and b0f[0]["winner_name"],
@@ -998,21 +1000,30 @@ ok(b0f[0]["completed"] is True and b0f[0]["winner_name"],
 # natural replacement: three other matches score after it -> it rotates off
 for mid_ in (pmids[1], pmids[2], pmids[4]):
     start_scoring(mid_, n_throws=1)
-data = c.get("/api/projector").get_json()
+data = c.get(f"/api/season/{sidP}/projector").get_json()
 ok(pmids[0] not in [b["match_id"] for b in data["boards"]],
    "completed match naturally replaced by fresher scoring")
 ok(all(b["completed"] is False for b in data["boards"]),
    "active boards flagged not-completed")
 
-r = c.get("/projector")
-ok(r.status_code == 200 and b"projector.js" in r.data, "projector page renders")
+r = c.get(f"/season/{sidP}/projector")
+ok(r.status_code == 200 and b"projector.js" in r.data
+   and f"window.SEASON_ID = {sidP}".encode() in r.data,
+   "season projector page renders with its season id")
+r = c.get("/projector", follow_redirects=False)
+ok(r.headers["Location"].endswith(f"/season/{sidP}/projector"),
+   "topbar link redirects to the most recently scored season")
+ok(b"Projector" in c.get(f"/season/{sidP}").data,
+   "Projector tab in the season nav")
 pj = open("static/projector.js").read()
 ok("keeps its slot" in pj and "vacated" in pj.lower() and "slots" in pj,
    "projector uses stable slot placement (no reshuffling on new scores)")
 # viewers can watch the projector
 c.post("/logout"); c.post("/login", data={"role": "viewer"})
-ok(c.get("/projector").status_code == 200, "viewer can open projector")
-ok(c.get("/api/projector").status_code == 200, "viewer can poll projector API")
+ok(c.get(f"/season/{sidP}/projector").status_code == 200,
+   "viewer can open the season projector")
+ok(c.get(f"/api/season/{sidP}/projector").status_code == 200,
+   "viewer can poll the season projector API")
 c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
 c.post(f"/season/{sidP}/delete")
 

@@ -121,15 +121,21 @@
 
   async function refresh() {
     try {
-      const r = await fetch("/api/projector");
+      const r = await fetch("/api/season/" + window.SEASON_ID + "/projector");
       if (!r.ok) return;
       const data = await r.json();
       root.innerHTML = "";
       if (!data.boards.length) {
         slots = [];
+        root.className = "proj-root";
         root.appendChild(el("div", "proj-idle",
           "No matches underway — check back soon 🪓"));
-        root.className = "proj-root";
+        if (data.achievements && data.achievements.length) {
+          root.appendChild(achievementsCard(data.achievements));
+        }
+        if (data.standings && data.standings.rows.length) {
+          root.appendChild(standingsCard(data.standings));
+        }
         return;
       }
       const byId = {};

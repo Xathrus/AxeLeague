@@ -758,12 +758,32 @@ def achievements_page(season_id):
 
 
 @app.route("/projector")
-def projector_page():
-    return render_template("projector.html")
+def projector_redirect():
+    """Legacy/topbar entry point: jump to the projector of the season with
+    the most recent scoring (falling back to the newest season)."""
+    db = get_db()
+    r = db.execute(
+        """SELECT m.season_id AS sid FROM throws t
+           JOIN sets s ON s.id=t.set_id JOIN games g ON g.id=s.game_id
+           JOIN matches m ON m.id=g.match_id
+           ORDER BY t.id DESC LIMIT 1""").fetchone()
+    if not r:
+        r = db.execute("SELECT id AS sid FROM seasons"
+                       " ORDER BY id DESC LIMIT 1").fetchone()
+    if not r:
+        return redirect(url_for("index"))
+    return redirect(url_for("projector_page", season_id=r["sid"]))
 
 
-@app.route("/api/projector")
-def api_projector():
+@app.route("/season/<int:season_id>/projector")
+def projector_page(season_id):
+    s = _season_or_404(season_id)
+    return render_template("projector.html", season=s)
+
+
+@app.route("/api/season/<int:season_id>/projector")
+def api_projector(season_id):
+    _season_or_404(season_id)
     db = get_db()
     rows = db.execute(
         """SELECT g.match_id AS mid, MAX(t.id) AS last_throw
@@ -771,9 +791,10 @@ def api_projector():
            JOIN sets s ON s.id = t.set_id
            JOIN games g ON g.id = s.game_id
            JOIN matches m ON m.id = g.match_id
+           WHERE m.season_id = ?
            GROUP BY g.match_id
            ORDER BY last_throw DESC
-           LIMIT 3""").fetchall()
+           LIMIT 3""", (season_id,)).fetchall()
     boards = []
     for r in rows:
         m = db.execute("SELECT * FROM matches WHERE id=?", (r["mid"],)).fetchone()
@@ -824,29 +845,20 @@ def api_projector():
                 "away_throws": [t["outcome"] for t in cs["away_throws"]],
             },
         })
-    standings = None
-    if boards:
-        lead_season = db.execute(
-            "SELECT * FROM seasons WHERE id=?",
-            (db.execute("SELECT season_id FROM matches WHERE id=?",
-                        (boards[0]["match_id"],)).fetchone()["season_id"],)
-        ).fetchone()
-        rows_ = stats_mod.standings(db, lead_season["id"])
-        standings = {
-            "season": lead_season["name"],
-            "rows": [{"team": r["name"], "wins": r["wins"],
-                      "losses": r["losses"], "bulls": r["bulls"]}
-                     for r in rows_],
-        }
-    recent = None
-    if boards:
-        sid_lead = db.execute("SELECT season_id FROM matches WHERE id=?",
-                              (boards[0]["match_id"],)).fetchone()["season_id"]
-        recent = [
-            {"icon": a["icon"], "name": a["name"], "who": a["who"],
-             "who_team": a["who_team"], "desc": a["desc"]}
-            for a in ach.list_achievements(db, sid_lead)[:5]
-        ]
+    season = db.execute("SELECT * FROM seasons WHERE id=?",
+                        (season_id,)).fetchone()
+    rows_ = stats_mod.standings(db, season_id)
+    standings = {
+        "season": season["name"],
+        "rows": [{"team": r["name"], "wins": r["wins"],
+                  "losses": r["losses"], "bulls": r["bulls"]}
+                 for r in rows_],
+    } if rows_ else None
+    recent = [
+        {"icon": a["icon"], "name": a["name"], "who": a["who"],
+         "who_team": a["who_team"], "desc": a["desc"]}
+        for a in ach.list_achievements(db, season_id)[:5]
+    ] or None
     return jsonify({"boards": boards, "standings": standings,
                     "achievements": recent})
 
