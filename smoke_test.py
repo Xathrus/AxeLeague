@@ -618,8 +618,16 @@ def fill2(i, ho, ao):
     assign(s2[i]["id"], h2, a2)
     fill(s2[i]["id"], h2, a2, ho, ao)
 fill2(0, ["1"]*10, ["2"]*10)   # G1: away 20, home 10 -> away wins G1
+away_team2 = st2["match"]["away_team_id"]
+ok(len(q("SELECT id FROM achievements WHERE season_id=? AND key=?"
+         " AND team_id=?", sidA, "how_did_that_happen", away_team2)) == 0,
+   "How did that happen? NOT awarded while the game is unfinished")
 fill2(1, ["M"]*10, ["M"]*10)
 fill2(2, ["M"]*10, ["M"]*10)
+hd2 = q("SELECT * FROM achievements WHERE season_id=? AND key=?"
+        " AND team_id=?", sidA, "how_did_that_happen", away_team2)
+ok(len(hd2) == 1 and hd2[0]["game_number"] == 1,
+   "How did that happen? awarded once all 3 sets are complete")
 fill2(3, ["3"]*10, ["1"]*10)   # G2 home 30-10
 fill2(4, ["M"]*10, ["M"]*10)
 fill2(5, ["M"]*10, ["M"]*10)

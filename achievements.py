@@ -197,8 +197,12 @@ def _detect(db, season_id):
             gtot = {"home": 0, "away": 0}
             gbulls = {"home": 0, "away": 0}
             side_totals = {"home": [], "away": []}
+            full_sets = 0
             for sn in sorted(g):
                 st = g[sn]
+                if (len(st["home"]["seq"]) == 10
+                        and len(st["away"]["seq"]) == 10):
+                    full_sets += 1
                 for side in ("home", "away"):
                     sd = st[side]
                     if sd["pid"] is None or not sd["seq"]:
@@ -260,9 +264,10 @@ def _detect(db, season_id):
                         team_id=own[side], match_id=m["id"], gn=gn,
                         detail="all three sets 55+ vs "
                                + str(teams.get(opp[side], "?")))
+            game_done = len(g) == 3 and full_sets == 3
             if gwin:
                 game_wins[gwin] += 1
-                if gbulls[gwin] == 0 and gtot[gwin] > 0:
+                if game_done and gbulls[gwin] == 0 and gtot[gwin] > 0:
                     add("how_did_that_happen", f"g{m['id']}.{gn}",
                         team_id=own[gwin], match_id=m["id"], gn=gn,
                         detail=f"won game {gn} bullseye-free vs "
