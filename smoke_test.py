@@ -839,6 +839,79 @@ stg = q("SELECT stage FROM matches WHERE id=?", wu[0]["match_id"])[0]["stage"]
 ok(stg == "playoff", "milestone credited to the playoff match where it crossed")
 c.post(f"/season/{sidV}/delete")
 
+# --- new killshot achievements + Closer set-3 restriction ---
+c.post("/seasons", data={"name": "KS Season"})
+sidK = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Alphas", "Betas"):
+    c.post(f"/season/{sidK}/teams", data={"name": t})
+tidK = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidK)}
+for nm, tm in (("KA1", "Alphas"), ("KA2", "Alphas"), ("KA3", "Alphas"),
+               ("KB1", "Betas"), ("KB2", "Betas"), ("KB3", "Betas")):
+    c.post(f"/team/{tidK[tm]}/players", data={"name": nm})
+pidK = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidK)}
+c.post(f"/season/{sidK}/schedule/generate")
+km = q("SELECT id FROM matches WHERE season_id=? ORDER BY id LIMIT 1",
+       sidK)[0]["id"]
+kst = state(km)
+a_home = kst["match"]["home_team_id"] == tidK["Alphas"]
+KA = lambda n: pidK[f"KA{n}"]
+KB = lambda n: pidK[f"KB{n}"]
+ksets = sets_of(km)
+
+def fillK(i, ap_, bp_, a_out, b_out):
+    sx = ksets[i]["id"]
+    hp_, ho = (ap_, a_out) if a_home else (bp_, b_out)
+    xp_, xo = (bp_, b_out) if a_home else (ap_, a_out)
+    assign(sx, hp_, xp_)
+    fill(sx, hp_, xp_, ho, xo)
+
+# G1: Going up? (matching first-throw killshots) + Blame the board (KB2)
+fillK(0, KA(1), KB(1), ["KH"]+["1"]*9, ["KH"]+["M"]*9)     # 17 vs 8
+fillK(1, KA(2), KB(2), ["M"]*10, ["D"]*5+["M"]*5)           # blame board
+fillK(2, KA(3), KB(3), ["M"]*10, ["M"]*10)                  # A wins G1 17-13
+# G2 (clinching game): A starts set 3 down 10, wins by exactly 2
+fillK(3, KA(1), KB(1), ["M"]*10, ["1"]*10)                  # B up 10-0
+fillK(4, KA(2), KB(2), ["M"]*10, ["M"]*10)                  # still 10-0
+fillK(5, KA(3), KB(3), ["KH","1","1","1","M","M","M","M","M","M"], ["M"]*10)
+# A set3 = 12 -> game 12-10, margin 2, clinch
+# G3: Team Kill — every Alpha hits a killshot
+fillK(6, KA(1), KB(1), ["KH"]+["M"]*9, ["M"]*10)
+fillK(7, KA(2), KB(2), ["KH"]+["M"]*9, ["M"]*10)
+fillK(8, KA(3), KB(3), ["KH"]+["M"]*9, ["M"]*10)
+post_json(f"/api/match/{km}/complete")
+
+def achK(key, **kw):
+    conds, args = ["season_id=?", "key=?"], [sidK, key]
+    for col, v in kw.items():
+        conds.append(f"{col}=?"); args.append(v)
+    return q("SELECT * FROM achievements WHERE " + " AND ".join(conds), *args)
+
+ok(len(achK("going_up", player_id=pidK["KA1"])) == 1
+   and len(achK("going_up", player_id=pidK["KB1"])) == 1,
+   "Going up? awarded to both throwers")
+ok(len(achK("going_up")) == 2, "Going up? only the two matching throwers")
+bb = achK("blame_the_board")
+ok(len(bb) == 1 and bb[0]["player_id"] == pidK["KB2"],
+   "Blame the board! for the 5-drop set")
+cl = achK("the_closer")
+ok(len(cl) == 1 and cl[0]["player_id"] == pidK["KA3"]
+   and cl[0]["set_number"] == 3,
+   "The Closer only for the 3rd-set thrower of the clinching game")
+ok(len(achK("the_closer", player_id=pidK["KA2"])) == 0,
+   "2nd-set thrower (also down 10 at set start) does NOT get The Closer")
+ki = achK("killin_it")
+ok(len(ki) == 1 and ki[0]["player_id"] == pidK["KA3"]
+   and ki[0]["game_number"] == 2,
+   "Killin' It for the killshot in the 2-point game win")
+tk = achK("team_kill")
+ok(len(tk) == 1 and tk[0]["team_id"] == tidK["Alphas"]
+   and tk[0]["game_number"] == 3,
+   "Team Kill when all three throwers hit killshots in one game")
+c.post(f"/season/{sidK}/delete")
+
 # --- reassign thrower with throws recorded; admin match reset ---
 c.post("/seasons", data={"name": "Swap Season"})
 sidS = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

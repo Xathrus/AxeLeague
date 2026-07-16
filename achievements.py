@@ -34,7 +34,10 @@ DEFS = {
     "turning_it_around": ("Turning it Around", "player", "🔄", "Land 3 killshots in a set with a drop"),
     "on_fire":        ("On Fire", "player", "🔥", "Hit 5 bullseyes in a row"),
     "first_blood":    ("First Blood", "player", "🗡️", "Killshot on a set's first throw"),
-    "the_closer":     ("The Closer", "player", "🧊", "Clinch the match from 5+ down"),
+    "the_closer":     ("The Closer", "player", "🧊", "Clinch the match from 5+ down in the final set"),
+    "going_up":       ("Going up?", "player", "⬆️", "Both throwers hit killshots on the same throw"),
+    "killin_it":      ("Killin' It", "player", "🔪", "Hit a killshot and win the game by 2 or less"),
+    "blame_the_board": ("Blame the board!", "player", "🙈", "Drop 5+ throws in one set"),
     "hope_not_fluke": ("Hope that Isn't a Fluke", "player", "🍀", "Beat your average by 10+"),
     "bad_days":       ("Everyone Has Bad Days", "player", "📉", "Fall 10+ below your average"),
     "warming_up":     ("Warming Up", "player", "🌡️", "Reach 250 season points"),
@@ -53,6 +56,7 @@ DEFS = {
     "giant_toppler":  ("Giant Toppler", "team", "🗿", "Beat a team with a better record"),
     "how_did_that_happen": ("How did that happen?", "team", "🤷", "Win a game with zero bullseyes"),
     "try_try_again":  ("If at first you don't succeed", "team", "🔁", "Beat a team that beat you"),
+    "team_kill":      ("Team Kill", "team", "☠️", "All three throwers hit killshots in one game"),
 }
 
 
@@ -69,7 +73,10 @@ LONG_DESC = {
     "turning_it_around": "Landed three killshots in a set that also included a drop.",
     "on_fire": "Hit five bullseyes in a row.",
     "first_blood": "Landed a killshot on the very first throw of a set.",
-    "the_closer": "Started a set with the team down five or more points in the game that clinched the match — and closed it out.",
+    "the_closer": "Threw the final set of the match-clinching game with the team down five or more points at its start — and closed it out.",
+    "going_up": "Called and hit a killshot on the exact same throw of a set as the opposing thrower.",
+    "killin_it": "Called and hit a killshot, then won that game by two points or fewer.",
+    "blame_the_board": "Finished a set with five or more drops. It's definitely the board's fault.",
     "hope_not_fluke": "Threw a set 10 or more points above their season average, with at least four sets already on record.",
     "bad_days": "Threw a set 10 or more points below their season average, with at least four sets already on record.",
     "warming_up": "Reached 250 cumulative points across the season, playoffs included.",
@@ -87,6 +94,7 @@ LONG_DESC = {
     "giant_toppler": "Beat a team that had a better win-loss record at the time.",
     "how_did_that_happen": "Won a game without a single bullseye from the whole team.",
     "try_try_again": "Beat a team that had beaten them earlier in the season.",
+    "team_kill": "Completed a game in which all three of the team's throwers called and hit a killshot.",
 }
 
 
@@ -198,11 +206,27 @@ def _detect(db, season_id):
             gbulls = {"home": 0, "away": 0}
             side_totals = {"home": [], "away": []}
             full_sets = 0
+            game_kh = {"home": [], "away": []}
             for sn in sorted(g):
                 st = g[sn]
                 if (len(st["home"]["seq"]) == 10
                         and len(st["away"]["seq"]) == 10):
                     full_sets += 1
+                for _side in ("home", "away"):
+                    _sd = st[_side]
+                    game_kh[_side].append(
+                        (_sd["pid"], "KH" in _sd["seq"]))
+                # Going up?: matching-throw killshots from both lanes
+                h_, a_ = st["home"], st["away"]
+                if h_["pid"] and a_["pid"]:
+                    for _i in range(min(len(h_["seq"]), len(a_["seq"]))):
+                        if h_["seq"][_i] == "KH" and a_["seq"][_i] == "KH":
+                            for _pid, _o in ((h_["pid"], a_), (a_["pid"], h_)):
+                                add("going_up", f"s{st['set_id']}.p{_pid}",
+                                    player_id=_pid, match_id=m["id"],
+                                    gn=gn, sn=sn,
+                                    detail=f"matching killshots on throw {_i + 1}")
+                            break
                 for side in ("home", "away"):
                     sd = st[side]
                     if sd["pid"] is None or not sd["seq"]:
@@ -233,6 +257,9 @@ def _detect(db, season_id):
                         add("turning_it_around", u, detail=vs, **ref)
                     if sd["seq"][0] == "KH":
                         add("first_blood", u, detail=vs, **ref)
+                    if x["n"] == 10 and x["drops"] >= 5:
+                        add("blame_the_board", u,
+                            detail=f"{x['drops']} drops {vs}", **ref)
                     streak = 0
                     fire = False
                     for i, o in enumerate(sd["seq"]):
@@ -265,8 +292,24 @@ def _detect(db, season_id):
                         detail="all three sets 55+ vs "
                                + str(teams.get(opp[side], "?")))
             game_done = len(g) == 3 and full_sets == 3
+            if game_done:
+                for side in ("home", "away"):
+                    kh_rows = game_kh[side]
+                    if (len(kh_rows) == 3
+                            and all(pid and flag for pid, flag in kh_rows)):
+                        add("team_kill", f"g{m['id']}.{gn}.{side}",
+                            team_id=own[side], match_id=m["id"], gn=gn,
+                            detail="killshots from all three throwers vs "
+                                   + str(teams.get(opp[side], "?")))
             if gwin:
                 game_wins[gwin] += 1
+                margin_g = gtot[gwin] - gtot["away" if gwin == "home" else "home"]
+                if game_done and 1 <= margin_g <= 2:
+                    for pid_k, flag_k in game_kh[gwin]:
+                        if pid_k and flag_k:
+                            add("killin_it", f"g{m['id']}.{gn}.p{pid_k}",
+                                player_id=pid_k, match_id=m["id"], gn=gn,
+                                detail=f"killshot in a {margin_g}-point game win")
                 if game_done and gbulls[gwin] == 0 and gtot[gwin] > 0:
                     add("how_did_that_happen", f"g{m['id']}.{gn}",
                         team_id=own[gwin], match_id=m["id"], gn=gn,
@@ -316,7 +359,7 @@ def _detect(db, season_id):
                 opp_side = "away" if w_side == "home" else "home"
                 deficit = cum[opp_side] - cum[w_side]
                 pid = st[w_side]["pid"]
-                if deficit >= 5 and pid:
+                if sn == 3 and deficit >= 5 and pid:
                     add("the_closer", f"s{st['set_id']}", player_id=pid,
                         match_id=m["id"], gn=clinch_gn, sn=sn,
                         detail=f"clinched from {deficit} down vs {l_name}")
