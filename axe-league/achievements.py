@@ -189,10 +189,6 @@ def _detect(db, season_id):
         if (key, subject) in awarded:
             return
         awarded.add((key, subject))
-        # uniq must identify the SUBJECT too: two players can earn the same
-        # set-scoped achievement in the same set (e.g. both throw 50+), and
-        # without the prefix their facts would collide and one would be lost.
-        uniq = f"{subject[0]}{subject[1]}.{uniq}"
         facts.append({"key": key, "uniq": uniq, "player_id": player_id,
                       "team_id": team_id, "match_id": match_id,
                       "game_number": gn, "set_number": sn, "detail": detail})

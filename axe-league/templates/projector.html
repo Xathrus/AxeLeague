@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Projector — {{ season.name }}{% endblock %}
+{% block content %}
+{% with active='projector' %}{% include "_season_nav.html" %}{% endwith %}
+<div class="proj-head">
+  <div class="proj-brand">
+    {% if branding.logo %}
+    <img src="{{ url_for('branding_logo_file') }}?v={{ branding.logo_version }}" alt="">
+    {% endif %}
+    <span>{{ branding.name|upper }} <span class="proj-season-name">· {{ season.name|upper }}</span></span>
+  </div>
+  <div class="proj-clock" id="proj-clock"></div>
+</div>
+<div id="proj-root" class="proj-root">
+  <div class="proj-idle">Warming up…</div>
+</div>
+<script>window.SEASON_ID = {{ season.id }};</script>
+<script src="{{ url_for('static', filename='projector.js') }}"></script>
+{% endblock %}

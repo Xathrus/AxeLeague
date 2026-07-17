@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ season.name }} — Abilene Axe League{% endblock %}
+{% block content %}
+{% with active='home' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">{{ season.name }}</h1>
+
+<div class="card-grid">
+  <a class="card big-link" href="{{ url_for('teams_page', season_id=season.id) }}">
+    <div class="card-title">Teams &amp; Rosters</div>
+    <div class="muted">{{ n_teams }} team{{ '' if n_teams==1 else 's' }} registered</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('schedule_page', season_id=season.id) }}">
+    <div class="card-title">Schedule &amp; Scorekeeping</div>
+    <div class="muted">{{ n_done }} of {{ n_matches }} matches completed</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('standings_page', season_id=season.id) }}">
+    <div class="card-title">Standings</div>
+    <div class="muted">
+      {% if top %}Leader: {{ top[0].name }} ({{ top[0].wins }}–{{ top[0].losses }}){% else %}No results yet{% endif %}
+    </div>
+  </a>
+  <a class="card big-link" href="{{ url_for('stats_page', season_id=season.id) }}">
+    <div class="card-title">Player &amp; Team Stats</div>
+    <div class="muted">Averages, bullseyes, kill %, weekly trends</div>
+  </a>
+  <a class="card big-link" href="{{ url_for('playoffs_page', season_id=season.id) }}">
+    <div class="card-title">Playoffs</div>
+    <div class="muted">{% if has_playoffs %}Bracket in progress{% else %}Double elimination — not created yet{% endif %}</div>
+  </a>
+</div>
+
+{% if can_edit %}
+<div class="danger-zone">
+  <h2 class="week-head">Admin</h2>
+  <form method="post" action="{{ url_for('rename_season', season_id=season.id) }}" class="inline-form">
+    <input name="name" value="{{ season.name }}" required>
+    <button type="submit">Rename season</button>
+  </form>
+  <a class="ghost" style="display:inline-block;margin:8px 0" href="{{ url_for('export_season', season_id=season.id) }}">Export season to file</a>
+  <form method="post" action="{{ url_for('delete_season', season_id=season.id) }}" class="inline"
+        onsubmit="return confirm('Delete this entire season? Teams, players, schedule, scores, and playoffs will all be permanently removed.');">
+    <button type="submit" class="ghost danger">Delete season…</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

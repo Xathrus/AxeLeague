@@ -6,7 +6,7 @@
 <div id="sk-root" class="sk-root">
   <div class="muted">Loading match…</div>
 </div>
-<script>window.MATCH_ID = {{ match.id }}; window.CAN_SCORE = {{ "true" if can_score else "false" }}; window.IS_ADMIN = {{ "true" if can_edit else "false" }};</script>
+<script>window.MATCH_ID = {{ match.id }}; window.CAN_SCORE = {{ "true" if can_score else "false" }};</script>
 <script src="{{ url_for('static', filename='scorekeeper.js') }}"></script>
 
 {% if can_edit %}

@@ -224,42 +224,6 @@
     sw.title = "Swap which side of the screen each team is shown on";
     sw.onclick = () => { ui.laneSwap[s.id] = !manual; render(); };
     view.appendChild(sw);
-
-    if (window.IS_ADMIN && !state.match.completed) {
-      const adm = el("div", "set-admin");
-      const rs = el("button", "ghost tiny danger", "Reset set");
-      rs.onclick = () => {
-        if (confirm("Reset this set? Its throws and thrower assignments " +
-                    "will be permanently deleted.")) {
-          api(`/api/set/${s.id}/reset`);
-        }
-      };
-      adm.appendChild(rs);
-
-      const sel = el("select", "player-select");
-      sel.appendChild(new Option("Move this set to…", ""));
-      state.games.forEach(g2 => {
-        g2.sets.forEach(s2 => {
-          if (s2.id === s.id) return;
-          const hasData = (s2.home_throws.length + s2.away_throws.length) > 0;
-          sel.appendChild(new Option(
-            `Game ${g2.number}, Set ${s2.number}` +
-            (hasData ? " (swap)" : ""), s2.id));
-        });
-      });
-      sel.onchange = () => {
-        if (!sel.value) return;
-        const label = sel.options[sel.selectedIndex].text;
-        const verb = label.includes("(swap)")
-          ? "Swap this set's throwers and throws with"
-          : "Move this set's throwers and throws to";
-        if (confirm(`${verb} ${label.replace(" (swap)", "")}?`)) {
-          api(`/api/set/${s.id}/move`, { target_set_id: +sel.value });
-        } else { render(); }
-      };
-      adm.appendChild(sel);
-      view.appendChild(adm);
-    }
     return view;
   }
 

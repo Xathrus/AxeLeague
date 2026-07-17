@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Stats — {{ season.name }}{% endblock %}
+
+{% macro holder_lines(rec) %}
+{% for h in rec.holders %}<div class="ov-sub">{{ h.name }} · {{ h.team }}</div>{% endfor %}
+{% if rec.holders|length > 1 %}<div class="ov-tied">{{ rec.holders|length }}-way tie</div>{% endif %}
+{% endmacro %}
+
+{% macro player_table(rows) %}
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr>
+    <th class="left">Player</th><th class="left">Team</th><th>Games</th><th>Avg / set</th>
+    <th>High</th><th>Low</th><th>50+ %</th><th>Bulls</th><th>Bull %</th>
+    <th>Drops</th><th>Drop %</th>
+    <th>KS att</th><th>Kill %</th>
+  </tr></thead>
+  <tbody>
+  {% for p in rows %}
+  <tr>
+    <td class="left">{{ p.name }}</td>
+    <td class="left">{{ p.team }}</td>
+    <td>{{ p.games }}</td>
+    <td>{{ '%.1f'|format(p.avg) if p.avg is not none else '—' }}</td>
+    <td>{{ p.high if p.high is not none else '—' }}</td>
+    <td>{{ p.low if p.low is not none else '—' }}</td>
+    <td>{{ '%.0f%%'|format(p.fifty_pct) if p.fifty_pct is not none else '—' }}</td>
+    <td>{{ p.bulls }}</td>
+    <td>{{ '%.1f%%'|format(p.bull_pct) if p.bull_pct is not none else '—' }}</td>
+    <td>{{ p.drops }}</td>
+    <td>{{ '%.1f%%'|format(p.drop_pct) if p.drop_pct is not none else '—' }}</td>
+    <td>{{ p.ks_att }}</td>
+    <td>{{ '%.0f%%'|format(p.kill_pct) if p.kill_pct is not none else '—' }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% macro team_table(rows) %}
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr>
+    <th class="left">Team</th><th>Avg / set</th><th>High set</th><th>50+ count</th>
+    <th>Bull %</th><th>Match W</th><th>Played</th>
+  </tr></thead>
+  <tbody>
+  {% for t in rows %}
+  <tr>
+    <td class="left">{{ t.name }}</td>
+    <td>{{ '%.1f'|format(t.avg) if t.avg is not none else '—' }}</td>
+    <td>{{ t.high if t.high is not none else '—' }}</td>
+    <td>{{ t.fifty_count }}</td>
+    <td>{{ '%.1f%%'|format(t.bull_pct) if t.bull_pct is not none else '—' }}</td>
+    <td>{{ t.match_wins }}</td>
+    <td>{{ t.matches_played }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+
+{% block content %}
+{% with active='stats' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">Stats <span class="muted-small">{{ season.name }}</span></h1>
+
+{% if overview %}
+<div class="section-banner">League Overview <span class="muted-small">regular season</span></div>
+<div class="overview-grid">
+  <div class="ov-card">
+    <div class="ov-label">League average score</div>
+    <div class="ov-value">{{ '%.1f'|format(overview.avg_score) }}</div>
+    <div class="ov-sub">per set</div>
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">League drop rate</div>
+    <div class="ov-value">{{ '%.1f%%'|format(overview.drop_pct) }}</div>
+    <div class="ov-sub">of all throws</div>
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">League bullseye ratio</div>
+    <div class="ov-value">{{ '%.1f%%'|format(overview.bull_pct) }}</div>
+    <div class="ov-sub">of non-killshot throws</div>
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">High score</div>
+    <div class="ov-value">{{ overview.high_score.value }}</div>
+    {{ holder_lines(overview.high_score) }}
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Highest average</div>
+    {% if overview.best_avg %}
+    <div class="ov-value">{{ '%.1f'|format(overview.best_avg.value) }}</div>
+    {{ holder_lines(overview.best_avg) }}
+    <div class="ov-sub muted">per set</div>
+    {% else %}<div class="ov-value">—</div>{% endif %}
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Best bullseye %</div>
+    {% if overview.best_bull_pct %}
+    <div class="ov-value">{{ '%.1f%%'|format(overview.best_bull_pct.value) }}</div>
+    {{ holder_lines(overview.best_bull_pct) }}
+    {% else %}<div class="ov-value">—</div>{% endif %}
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Most bullseyes</div>
+    {% if overview.most_bulls %}
+    <div class="ov-value">{{ overview.most_bulls.value }}</div>
+    {{ holder_lines(overview.most_bulls) }}
+    {% else %}<div class="ov-value">—</div>{% endif %}
+  </div>
+  <div class="ov-card">
+    <div class="ov-label">Best killshot %</div>
+    {% if overview.best_kill_pct %}
+    <div class="ov-value">{{ '%.1f%%'|format(overview.best_kill_pct.value) }}</div>
+    {{ holder_lines(overview.best_kill_pct) }}
+    {% else %}<div class="ov-value">—</div>{% endif %}
+  </div>
+</div>
+<p class="muted-small">Bullseye percentages exclude killshot attempts (a killshot can't score a bullseye). Average and percentage leaders need {{ overview.min_non_ks }}+ non-killshot throws ({{ overview.min_ks_att }}+ killshot attempts for killshot %); until someone qualifies, all players are considered.</p>
+{% endif %}
+
+{% if has_playoff_data %}
+<div class="section-banner playoff">🏆 Playoffs</div>
+
+<h2 class="week-head">Player — Playoffs</h2>
+{{ player_table(p_players) }}
+
+<h2 class="week-head">Team — Playoffs</h2>
+{{ team_table(p_teams) }}
+
+<div class="section-banner">Regular Season</div>
+{% endif %}
+
+<h2 class="week-head">Player — Regular Season</h2>
+{{ player_table(players) }}
+
+<h2 class="week-head">Team — Regular Season</h2>
+{{ team_table(teams) }}
+
+<h2 class="week-head">Weekly Average <span class="muted-small">per set — rounds grouped by their scheduled date</span></h2>
+{% if weeks %}
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr>
+    <th class="left">Player</th><th class="left">Team</th>
+    {% for w in weeks %}<th>{{ w.label }}</th>{% endfor %}
+  </tr></thead>
+  <tbody>
+  {% for p in weekly %}
+  <tr>
+    <td class="left">{{ p.name }}</td>
+    <td class="left">{{ p.team }}</td>
+    {% for w in weeks %}
+    <td>{{ '%.1f'|format(p.weeks[w.key]) if w.key in p.weeks else '—' }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">No results yet.</p>
+{% endif %}
+
+{% if weekly_highs %}
+<h2 class="week-head">Weekly High Scores</h2>
+<div class="overview-grid">
+  {% for w in weekly_highs %}
+  <div class="ov-card">
+    <div class="ov-label">{{ w.label }}</div>
+    <div class="ov-value">{{ w.value }}</div>
+    {{ holder_lines(w) }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+<script src="{{ url_for('static', filename='sort.js') }}"></script>
+{% endblock %}
