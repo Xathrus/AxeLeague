@@ -26,6 +26,7 @@
     set: 0,             // index 0..2
     ks: {},             // playerId -> killshot armed
     laneSwap: {},       // setId -> manual lane-switch override (visual)
+    lastLanes: {},      // setId -> last rendered 'swapped' state (animation)
     editing: null,      // {throwId, outcome, label}
     navigated: false,   // auto-jump to first open set once
     error: "",
@@ -218,14 +219,63 @@
     const away = panel(s, "away");
     if (swapped) { panels.appendChild(away); panels.appendChild(home); }
     else { panels.appendChild(home); panels.appendChild(away); }
+
+    // Animate the crossing whenever the arrangement changes (auto at throw 5
+    // or the manual button) so the swap reads visually instead of snapping.
+    const prevLanes = ui.lastLanes[s.id];
+    if (prevLanes !== undefined && prevLanes !== swapped) {
+      panels.children[0].classList.add("lane-cross-from-right");
+      panels.children[1].classList.add("lane-cross-from-left");
+      const toast = el("div", "swap-toast", "⇄ LANES SWAPPED");
+      view.appendChild(toast);
+      setTimeout(() => toast.classList.add("gone"), 2600);
+    }
+    ui.lastLanes[s.id] = swapped;
     view.appendChild(panels);
 
+    // Who leads the game right now
+    const g = state.games[ui.game];
+    const lead = el("div", "game-lead");
+    const diff = g.home_total - g.away_total;
+    if (diff === 0) {
+      lead.textContent = `Game ${g.number}: tied ${g.home_total}–${g.away_total}`;
+    } else {
+      const name = diff > 0 ? state.match.home_team_name
+                            : state.match.away_team_name;
+      lead.innerHTML = "";
+      lead.appendChild(el("strong", "", name));
+      lead.appendChild(document.createTextNode(
+        ` leads Game ${g.number} by ${Math.abs(diff)}`));
+      lead.appendChild(el("span", "muted-small",
+        `  (${g.home_total}–${g.away_total})`));
+    }
+    view.appendChild(lead);
+
+    const controls = el("div", "set-controls");
     const sw = el("button", "ghost lane-switch", "⇄ Switch lanes");
     sw.title = "Swap which side of the screen each team is shown on";
     sw.onclick = () => { ui.laneSwap[s.id] = !manual; render(); };
-    view.appendChild(sw);
+    controls.appendChild(sw);
 
-    if (window.IS_ADMIN && !state.match.completed) {
+    const anyThrows = s.home_throws.length + s.away_throws.length > 0;
+    if (window.CAN_SCORE && !state.match.completed
+        && s.home_player_id && s.away_player_id && anyThrows) {
+      const sx = el("button", "ghost lane-switch", "↕ Swap players' scores");
+      sx.title = "Exchange the recorded throws between the two throwers";
+      sx.onclick = () => {
+        if (confirm("Swap all recorded throws between "
+            + (s.home_player_name || "the home thrower") + " and "
+            + (s.away_player_name || "the away thrower")
+            + " for this set? Use this when scores were recorded on the "
+            + "wrong person.")) {
+          api(`/api/set/${s.id}/swap_scores`);
+        }
+      };
+      controls.appendChild(sx);
+    }
+    view.appendChild(controls);
+
+    if (window.CAN_SCORE && !state.match.completed) {
       const adm = el("div", "set-admin");
       const rs = el("button", "ghost tiny danger", "Reset set");
       rs.onclick = () => {
@@ -235,6 +285,8 @@
         }
       };
       adm.appendChild(rs);
+
+      if (!window.IS_ADMIN) { view.appendChild(adm); return view; }
 
       const sel = el("select", "player-select");
       sel.appendChild(new Option("Move this set to…", ""));
@@ -331,6 +383,9 @@
     }
     nameRow.appendChild(el("div", "sk-set-total", String(s[side + "_total"])));
     p.appendChild(nameRow);
+    p.appendChild(el("div", "sk-throw-indicator",
+      throws.length >= 10 ? "Set complete"
+                          : `Throw ${throws.length + 1} of 10`));
 
     // ---- killshot pips
     const pipRow = el("div", "ks-pips");

@@ -892,7 +892,7 @@ def reset_match(match_id):
 
 
 @app.post("/api/set/<int:set_id>/reset")
-@admin_required
+@scorekeeper_required
 def api_reset_set(set_id):
     db = get_db()
     row = db.execute(
@@ -906,6 +906,41 @@ def api_reset_set(set_id):
     db.execute("DELETE FROM throws WHERE set_id=?", (set_id,))
     db.execute("UPDATE sets SET home_player_id=NULL, away_player_id=NULL"
                " WHERE id=?", (set_id,))
+    ach.recompute(db, row["season_id"])
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/set/<int:set_id>/swap_scores")
+@scorekeeper_required
+def api_swap_set_scores(set_id):
+    """Exchange the recorded throws between the set's two assigned throwers —
+    the fix for 'we scored that on the wrong person'."""
+    db = get_db()
+    row = db.execute(
+        """SELECT s.*, m.completed, m.season_id FROM sets s
+           JOIN games g ON g.id=s.game_id JOIN matches m ON m.id=g.match_id
+           WHERE s.id=?""", (set_id,)).fetchone()
+    if not row:
+        return _err("Set not found", 404)
+    if row["completed"]:
+        return _err("Match is completed. Reopen it to make changes.")
+    hp, ap = row["home_player_id"], row["away_player_id"]
+    if not hp or not ap:
+        return _err("Both throwers must be assigned before swapping scores.")
+    throws = [dict(t) for t in db.execute(
+        "SELECT player_id, throw_number, outcome, points FROM throws"
+        " WHERE set_id=?", (set_id,)).fetchall()]
+    if not throws:
+        return _err("There are no throws to swap yet.")
+    db.execute("DELETE FROM throws WHERE set_id=?", (set_id,))
+    flip = {hp: ap, ap: hp}
+    for t in throws:
+        db.execute(
+            """INSERT INTO throws (set_id, player_id, throw_number, outcome,
+                 points) VALUES (?,?,?,?,?)""",
+            (set_id, flip.get(t["player_id"], t["player_id"]),
+             t["throw_number"], t["outcome"], t["points"]))
     ach.recompute(db, row["season_id"])
     db.commit()
     return jsonify({"ok": True})

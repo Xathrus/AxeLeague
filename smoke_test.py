@@ -1065,12 +1065,37 @@ nach = q("""SELECT COUNT(*) n FROM achievements WHERE season_id=?
 ok(nach == 0, "achievements revoked once the 50-point set was reset away")
 
 # roles + completed guard
-c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
 ok(post_json(f"/api/set/{s_a}/reset").status_code == 403,
-   "scorekeeper cannot reset a set")
+   "viewer cannot reset a set")
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+assign(s_b, rh, ra)  # s_b was emptied by the earlier move
+throw(s_b, rh, "2")  # give the scorekeeper something to reset
+ok(post_json(f"/api/set/{s_b}/reset").status_code == 200,
+   "scorekeeper CAN reset a set now")
+stO = state(om)
+ok(len(stO["games"][0]["sets"][1]["home_throws"]) == 0,
+   "scorekeeper reset cleared the set")
 ok(post_json(f"/api/set/{s_a}/move",
              {"target_set_id": s_b}).status_code == 403,
-   "scorekeeper cannot move a set")
+   "set MOVE stays admin-only")
+
+# swap players' scores within a set (scorekeeper allowed)
+assign(s_b, rh, ra)
+throw(s_b, rh, "5"); throw(s_b, rh, "B")   # home: 11
+throw(s_b, ra, "1")                        # away: 1
+r = post_json(f"/api/set/{s_b}/swap_scores")
+ok(r.status_code == 200, "scorekeeper swaps the two throwers' scores")
+sb = state(om)["games"][0]["sets"][1]
+ok(sb["home_total"] == 1 and sb["away_total"] == 11,
+   "recorded throws exchanged between throwers")
+ok([t["outcome"] for t in sb["away_throws"]] == ["5", "B"],
+   "sequences moved intact")
+ok(sb["home_player_id"] == rh and sb["away_player_id"] == ra,
+   "thrower assignments unchanged by the score swap")
+post_json(f"/api/set/{s_b}/swap_scores")  # swap back for the later fill loop
+r = post_json(f"/api/set/{osets[2]['id']}/swap_scores")
+ok(r.status_code == 400, "swap rejected when the set has no throws")
 c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
 hp_ = rh; ap_ = ra
 for gi in (0, 1):
@@ -1090,7 +1115,22 @@ ok(post_json(f"/api/set/{s_a}/reset").status_code == 400,
 ok(post_json(f"/api/set/{s_a}/move",
              {"target_set_id": s_b}).status_code == 400,
    "completed match blocks set move")
+ok(post_json(f"/api/set/{s_a}/swap_scores").status_code == 400,
+   "completed match blocks score swap")
 c.post(f"/season/{sidO}/delete")
+
+# scorekeeper UI carries the new elements
+skj = open("static/scorekeeper.js").read()
+ok("Throw ${throws.length + 1} of 10" in skj and "Set complete" in skj,
+   "per-panel current-throw indicator present")
+ok("leads Game" in skj and "game-lead" in skj,
+   "game lead bar present")
+ok("lane-cross-from-right" in skj and "swap-toast" in skj,
+   "lane-swap crossing animation wired")
+css_ = open("static/style.css").read()
+ok("@keyframes lane-cross-right" in css_
+   and "prefers-reduced-motion" in css_,
+   "animation styles present with reduced-motion fallback")
 
 # achievements page: no timestamps
 r = c.get(f"/season/{season_id}/achievements")
