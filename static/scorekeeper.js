@@ -226,9 +226,6 @@
     if (prevLanes !== undefined && prevLanes !== swapped) {
       panels.children[0].classList.add("lane-cross-from-right");
       panels.children[1].classList.add("lane-cross-from-left");
-      const toast = el("div", "swap-toast", "⇄ LANES SWAPPED");
-      view.appendChild(toast);
-      setTimeout(() => toast.classList.add("gone"), 2600);
     }
     ui.lastLanes[s.id] = swapped;
     view.appendChild(panels);
@@ -244,8 +241,8 @@
                             : state.match.away_team_name;
       lead.innerHTML = "";
       lead.appendChild(el("strong", "", name));
-      lead.appendChild(document.createTextNode(
-        ` leads Game ${g.number} by ${Math.abs(diff)}`));
+      lead.appendChild(document.createTextNode(` leads Game ${g.number} by `));
+      lead.appendChild(el("span", "lead-amt", String(Math.abs(diff))));
       lead.appendChild(el("span", "muted-small",
         `  (${g.home_total}–${g.away_total})`));
     }
@@ -256,23 +253,6 @@
     sw.title = "Swap which side of the screen each team is shown on";
     sw.onclick = () => { ui.laneSwap[s.id] = !manual; render(); };
     controls.appendChild(sw);
-
-    const anyThrows = s.home_throws.length + s.away_throws.length > 0;
-    if (window.CAN_SCORE && !state.match.completed
-        && s.home_player_id && s.away_player_id && anyThrows) {
-      const sx = el("button", "ghost lane-switch", "↕ Swap players' scores");
-      sx.title = "Exchange the recorded throws between the two throwers";
-      sx.onclick = () => {
-        if (confirm("Swap all recorded throws between "
-            + (s.home_player_name || "the home thrower") + " and "
-            + (s.away_player_name || "the away thrower")
-            + " for this set? Use this when scores were recorded on the "
-            + "wrong person.")) {
-          api(`/api/set/${s.id}/swap_scores`);
-        }
-      };
-      controls.appendChild(sx);
-    }
     view.appendChild(controls);
 
     if (window.CAN_SCORE && !state.match.completed) {
@@ -285,6 +265,22 @@
         }
       };
       adm.appendChild(rs);
+
+      const anyThrows = s.home_throws.length + s.away_throws.length > 0;
+      if (s.home_player_id && s.away_player_id && anyThrows) {
+        const sx = el("button", "ghost tiny", "↕ Swap players' scores");
+        sx.title = "Exchange the recorded throws between the two throwers";
+        sx.onclick = () => {
+          if (confirm("Swap all recorded throws between "
+              + (s.home_player_name || "the home thrower") + " and "
+              + (s.away_player_name || "the away thrower")
+              + " for this set? Use this when scores were recorded on the "
+              + "wrong person.")) {
+            api(`/api/set/${s.id}/swap_scores`);
+          }
+        };
+        adm.appendChild(sx);
+      }
 
       if (!window.IS_ADMIN) { view.appendChild(adm); return view; }
 

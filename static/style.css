@@ -481,9 +481,10 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   text-transform: uppercase; color: var(--gold); margin: 2px 0 8px; }
 
 /* game lead bar */
-.game-lead { text-align: center; margin: 14px 0 4px; font-size: 17px;
+.game-lead { text-align: center; margin: 14px 0 4px; font-size: 20px;
   color: var(--ink-dim); }
-.game-lead strong { color: var(--gold); }
+.game-lead strong { color: var(--ink); }
+.game-lead .lead-amt { font-weight: 800; font-size: 24px; color: var(--gold); }
 
 /* set control row (lane switch + score swap) */
 .set-controls { display: flex; gap: 12px; justify-content: center;
@@ -507,12 +508,4 @@ button:disabled { opacity: .35; cursor: not-allowed; }
   .lane-cross-from-right, .lane-cross-from-left { animation: none; }
 }
 
-/* lanes-swapped toast */
-.swap-toast { position: sticky; top: 8px; z-index: 5; margin: 0 auto 10px;
-  width: max-content; background: var(--red); color: #fff; font-weight: 800;
-  letter-spacing: .12em; padding: 8px 18px; border-radius: 999px;
-  box-shadow: 0 4px 14px rgba(0,0,0,.45); animation: toast-pulse 1.3s ease 2;
-  transition: opacity .5s; }
-.swap-toast.gone { opacity: 0; }
-@keyframes toast-pulse { 0%,100% { transform: scale(1); }
-  50% { transform: scale(1.07); } }
+

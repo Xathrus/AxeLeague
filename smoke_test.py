@@ -1125,8 +1125,11 @@ ok("Throw ${throws.length + 1} of 10" in skj and "Set complete" in skj,
    "per-panel current-throw indicator present")
 ok("leads Game" in skj and "game-lead" in skj,
    "game lead bar present")
-ok("lane-cross-from-right" in skj and "swap-toast" in skj,
-   "lane-swap crossing animation wired")
+ok("lane-cross-from-right" in skj and "swap-toast" not in skj,
+   "crossing animation kept, red toast removed")
+ok('el("button", "ghost tiny", "↕ Swap players\' scores")' in skj,
+   "score-swap button small, in the admin row")
+ok('"lead-amt"' in skj, "lead amount emphasized")
 css_ = open("static/style.css").read()
 ok("@keyframes lane-cross-right" in css_
    and "prefers-reduced-motion" in css_,
