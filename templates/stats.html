@@ -64,7 +64,8 @@
 
 {% block content %}
 {% with active='stats' %}{% include "_season_nav.html" %}{% endwith %}
-<h1 class="page-title">Stats <span class="muted-small">{{ season.name }}</span></h1>
+<h1 class="page-title">Stats <span class="muted-small">{{ season.name }}</span>
+  <a class="ghost detail-link" href="{{ url_for('player_stats_page', season_id=season.id) }}">Detailed player stats →</a></h1>
 
 {% if overview %}
 <div class="section-banner">League Overview <span class="muted-small">regular season</span></div>

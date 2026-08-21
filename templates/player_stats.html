@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Detailed Stats — {{ season.name }}{% endblock %}
+
+{% macro fmt(v, pct=False, dec=1) -%}
+{%- if v is none %}—{% elif pct %}{{ ('%.' ~ dec ~ 'f')|format(v) }}%{% else %}{{ ('%.' ~ dec ~ 'f')|format(v) }}{% endif -%}
+{%- endmacro %}
+
+{% block content %}
+{% with active='stats' %}{% include "_season_nav.html" %}{% endwith %}
+<h1 class="page-title">Detailed Stats <span class="muted-small">{{ season.name }}</span></h1>
+
+<form method="get" class="inline-form" id="pick-form">
+  <select name="player" onchange="document.getElementById('pick-form').submit()">
+    <option value="" {% if not selected %}selected{% endif %} disabled>Select a player…</option>
+    {% for t in teams %}
+    <optgroup label="{{ t.name }}">
+      {% for pl in roster if pl.team_id == t.id %}
+      <option value="{{ pl.id }}" {% if pl.id == selected %}selected{% endif %}>{{ pl.name }}</option>
+      {% endfor %}
+    </optgroup>
+    {% endfor %}
+  </select>
+  <a class="ghost" href="{{ url_for('stats_page', season_id=season.id) }}">← League stats</a>
+</form>
+
+{% if not d %}
+<p class="muted">Pick a player to see the full breakdown.</p>
+{% elif d.empty %}
+<p class="muted">{{ d.player.name }} hasn't thrown a set yet this season.</p>
+{% else %}
+<h2 class="week-head">{{ d.player.name }} <span class="muted-small">· {{ d.player.team_name }} · Regular Season</span></h2>
+
+<div class="overview-grid">
+  <div class="ov-card"><div class="ov-label">Total points</div>
+    <div class="ov-value">{{ d.reg.points }}</div>
+    <div class="ov-sub">{{ d.reg.sets }} sets · {{ d.reg.throws }} throws</div></div>
+  <div class="ov-card"><div class="ov-label">Average / set</div>
+    <div class="ov-value">{{ fmt(d.reg.avg) }}</div>
+    <div class="ov-sub">±{{ fmt(d.reg.stdev) }} consistency</div></div>
+  <div class="ov-card"><div class="ov-label">High / Low</div>
+    <div class="ov-value">{{ d.reg.high }} / {{ d.reg.low }}</div>
+    <div class="ov-sub">{{ d.reg.fifty }} sets of 50+ ({{ fmt(d.reg.fifty_pct, true, 0) }})</div></div>
+  <div class="ov-card"><div class="ov-label">Points per throw</div>
+    <div class="ov-value">{{ fmt(d.reg.ppt, false, 2) }}</div></div>
+  <div class="ov-card"><div class="ov-label">Bullseyes</div>
+    <div class="ov-value">{{ d.reg.bulls }}</div>
+    <div class="ov-sub">{{ fmt(d.reg.bull_pct, true) }} of non-killshot throws · best streak {{ d.best_streak }}</div></div>
+  <div class="ov-card"><div class="ov-label">Killshots</div>
+    <div class="ov-value">{{ d.reg.ks_hit }}/{{ d.reg.ks_att }}</div>
+    <div class="ov-sub">{{ fmt(d.reg.kill_pct, true, 0) }} kill rate</div></div>
+  <div class="ov-card"><div class="ov-label">Drops</div>
+    <div class="ov-value">{{ d.reg.drops }}</div>
+    <div class="ov-sub">{{ fmt(d.reg.drop_pct, true) }} of throws</div></div>
+  <div class="ov-card"><div class="ov-label">Current form</div>
+    <div class="ov-value">{{ fmt(d.form.avg) }}
+      {% if d.form.avg is not none and d.reg.avg is not none %}
+        {% if d.form.avg > d.reg.avg %}<span class="form-up">▲</span>
+        {% elif d.form.avg < d.reg.avg %}<span class="form-down">▼</span>{% endif %}
+      {% endif %}</div>
+    <div class="ov-sub">last {{ d.form.n }} sets vs {{ fmt(d.reg.avg) }} season</div></div>
+</div>
+
+{% if d.achievement_keys %}
+<div class="ach-strip">
+  {% for k in d.achievement_keys %}
+  {% set a = d.ach_defs.get(k) %}
+  {% if a %}<span class="ach-pill" title="{{ a[3] }}">{{ a[2] }} {{ a[0] }}</span>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2 class="week-head">Throw Mix</h2>
+<div class="table-scroll">
+<table class="stats-table mix-table">
+  <thead><tr><th class="left">Throw</th><th>Count</th><th>% of throws</th><th class="left"></th></tr></thead>
+  <tbody>
+  {% for m in d.mix %}
+  <tr>
+    <td class="left">{{ m.label }}</td>
+    <td>{{ m.count }}</td>
+    <td>{{ '%.1f%%'|format(m.pct) }}</td>
+    <td class="left mix-bar-cell"><div class="mix-bar o-{{ {'B':'bull','KH':'kshit','KD':'ksdrop','KM':'ksmiss','D':'drop','M':'miss'}.get(m.outcome, 'score') }}" style="width: {{ [m.pct * 2.4, 100]|min }}%"></div></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="week-head">How They Compare <span class="muted-small">league regular season</span></h2>
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr><th class="left">Stat</th><th>{{ d.player.name.split(' ')[0] }}</th><th>League avg</th><th>Rank</th></tr></thead>
+  <tbody>
+  {% for c in d.comps %}
+  <tr>
+    <td class="left">{{ c.label }}{% if not c.reverse %} <span class="muted-small">(lower is better)</span>{% endif %}</td>
+    <td class="{{ 'stat-good' if c.mine is not none and c.league is not none and ((c.mine > c.league) == c.reverse) and c.mine != c.league }}">{{ fmt(c.mine, c.pct) }}</td>
+    <td>{{ fmt(c.league, c.pct) }}</td>
+    <td>{% if c.rank %}#{{ c.rank }} <span class="muted-small">of {{ c.of }}</span>{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2 class="week-head">Before &amp; After the Lane Swap</h2>
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr><th class="left"></th><th>Throws</th><th>Points / throw</th><th>Bullseye %</th></tr></thead>
+  <tbody>
+    <tr><td class="left">Throws 1–5</td><td>{{ d.lane.first.throws }}</td><td>{{ fmt(d.lane.first.ppt, false, 2) }}</td><td>{{ fmt(d.lane.first.bull_pct, true) }}</td></tr>
+    <tr><td class="left">Throws 6–10 <span class="muted-small">after the swap</span></td><td>{{ d.lane.second.throws }}</td><td>{{ fmt(d.lane.second.ppt, false, 2) }}</td><td>{{ fmt(d.lane.second.bull_pct, true) }}</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2 class="week-head">Round by Round <span class="muted-small">average per set</span></h2>
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr><th class="left"></th>{% for r in d.rounds %}<th>{{ r.label }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr><td class="left">{{ d.player.name.split(' ')[0] }}</td>
+      {% for r in d.rounds %}<td>{{ fmt(r.mine) if r.mine is not none else '—' }}</td>{% endfor %}</tr>
+    <tr><td class="left muted-small">League</td>
+      {% for r in d.rounds %}<td class="muted-small">{{ fmt(r.league) if r.league is not none else '—' }}</td>{% endfor %}</tr>
+  </tbody>
+</table>
+</div>
+
+<h2 class="week-head">Head to Head <span class="muted-small">set record vs each opponent</span></h2>
+{% if d.h2h %}
+<div class="table-scroll">
+<table class="stats-table">
+  <thead><tr><th class="left">Opponent</th><th>Sets</th><th>W–L–T</th><th>Avg for</th><th>Avg against</th></tr></thead>
+  <tbody>
+  {% for r in d.h2h %}
+  <tr>
+    <td class="left">{{ r.name }}</td>
+    <td>{{ r.n }}</td>
+    <td class="{{ 'stat-good' if r.w > r.l else 'stat-bad' if r.l > r.w }}">{{ r.w }}–{{ r.l }}–{{ r.t }}</td>
+    <td>{{ fmt(r.avg_for) }}</td>
+    <td>{{ fmt(r.avg_against) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="muted">No head-to-head sets yet.</p>{% endif %}
+
+<h2 class="week-head">Notable Sets</h2>
+<div class="overview-grid">
+  {% if d.best %}
+  <div class="ov-card"><div class="ov-label">Best set</div>
+    <div class="ov-value">{{ d.best.total }}</div>
+    <div class="ov-sub">vs {{ d.best.opp or d.best.opp_team }}{% if d.best.week %} · Rd {{ d.best.week }}{% endif %} · <a href="{{ url_for('match_page', match_id=d.best.mid) }}">Game {{ d.best.gn }}, Set {{ d.best.sn }}</a></div></div>
+  {% endif %}
+  {% if d.worst %}
+  <div class="ov-card"><div class="ov-label">Toughest set</div>
+    <div class="ov-value">{{ d.worst.total }}</div>
+    <div class="ov-sub">vs {{ d.worst.opp or d.worst.opp_team }}{% if d.worst.week %} · Rd {{ d.worst.week }}{% endif %} · <a href="{{ url_for('match_page', match_id=d.worst.mid) }}">Game {{ d.worst.gn }}, Set {{ d.worst.sn }}</a></div></div>
+  {% endif %}
+</div>
+
+{% if d.po %}
+<h2 class="week-head">Playoffs</h2>
+<div class="overview-grid">
+  <div class="ov-card"><div class="ov-label">Playoff points</div>
+    <div class="ov-value">{{ d.po.points }}</div>
+    <div class="ov-sub">{{ d.po.sets }} sets</div></div>
+  <div class="ov-card"><div class="ov-label">Playoff average</div>
+    <div class="ov-value">{{ fmt(d.po.avg) }}</div>
+    <div class="ov-sub">high {{ d.po.high }}</div></div>
+  <div class="ov-card"><div class="ov-label">Playoff bullseyes</div>
+    <div class="ov-value">{{ d.po.bulls }}</div>
+    <div class="ov-sub">{{ fmt(d.po.bull_pct, true) }}</div></div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

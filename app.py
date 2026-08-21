@@ -750,6 +750,27 @@ def _season_of_set(db, set_id):
     return r["sid"] if r else None
 
 
+@app.route("/season/<int:season_id>/player-stats")
+def player_stats_page(season_id):
+    s = _season_or_404(season_id)
+    db = get_db()
+    teams = db.execute(
+        "SELECT id, name FROM teams WHERE season_id=? ORDER BY name",
+        (season_id,)).fetchall()
+    roster = db.execute(
+        """SELECT p.id, p.name, p.team_id FROM players p
+           JOIN teams t ON t.id=p.team_id WHERE t.season_id=?
+           ORDER BY p.name""", (season_id,)).fetchall()
+    pid = request.args.get("player", type=int)
+    detail = None
+    if pid and any(r["id"] == pid for r in roster):
+        detail = stats_mod.player_detail(db, season_id, pid)
+        if detail and not detail.get("empty"):
+            detail["ach_defs"] = ach.DEFS
+    return render_template("player_stats.html", season=s, teams=teams,
+                           roster=roster, selected=pid, d=detail)
+
+
 @app.route("/season/<int:season_id>/achievements")
 def achievements_page(season_id):
     s = _season_or_404(season_id)

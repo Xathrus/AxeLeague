@@ -509,3 +509,25 @@ button:disabled { opacity: .35; cursor: not-allowed; }
 }
 
 
+
+
+/* detailed player stats */
+.detail-link { font-size: 13px; margin-left: 14px; text-decoration: none;
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px;
+  vertical-align: middle; }
+.detail-link:hover { border-color: var(--gold); color: var(--gold); }
+.mix-bar-cell { width: 40%; min-width: 160px; }
+.mix-bar { height: 12px; border-radius: 4px; background: var(--gold);
+  min-width: 2px; }
+.mix-bar.o-bull { background: var(--gold); }
+.mix-bar.o-kshit { background: var(--green); }
+.mix-bar.o-ksdrop, .mix-bar.o-ksmiss { background: #7a5b3a; }
+.mix-bar.o-drop, .mix-bar.o-miss { background: var(--red); opacity: .7; }
+.mix-bar.o-score { background: var(--ink-dim); }
+.stat-good { color: #7fd49a; font-weight: 700; }
+.stat-bad { color: #e58c84; font-weight: 700; }
+.form-up { color: #7fd49a; font-size: 18px; }
+.form-down { color: #e58c84; font-size: 18px; }
+.ach-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; }
+.ach-pill { border: 1px solid var(--line); border-radius: 999px;
+  padding: 4px 12px; font-size: 13px; background: var(--panel); }

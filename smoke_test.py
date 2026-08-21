@@ -1139,6 +1139,84 @@ ok("@keyframes lane-cross-right" in css_
 r = c.get(f"/season/{season_id}/achievements")
 ok(b"ach-date" not in r.data, "timestamps removed from the achievements page")
 
+# --- detailed player stats page ---
+c.post("/seasons", data={"name": "Detail Season"})
+sidD = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Ash", "Birch"):
+    c.post(f"/season/{sidD}/teams", data={"name": t})
+tidD = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidD)}
+c.post(f"/team/{tidD['Ash']}/players", data={"name": "DP"})
+c.post(f"/team/{tidD['Birch']}/players", data={"name": "DO"})
+pidD = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidD)}
+c.post(f"/season/{sidD}/schedule/generate")
+dm = q("SELECT id FROM matches WHERE season_id=? LIMIT 1", sidD)[0]["id"]
+dst = state(dm)
+dh = pidD["DP"] if dst["match"]["home_team_id"] == tidD["Ash"] else pidD["DO"]
+da = pidD["DO"] if dh == pidD["DP"] else pidD["DP"]
+dsets = sets_of(dm)
+dp_home = dh == pidD["DP"]
+def fillD(i, dp_out, do_out):
+    sx = dsets[i]["id"]
+    assign(sx, dh, da)
+    fill(sx, dh, da, dp_out if dp_home else do_out,
+         do_out if dp_home else dp_out)
+# DP set 1: known mix — 5,5,4,3,B,B,D,B,M,KH = 5+5+4+3+6+6+0+6+0+8 = 43
+fillD(0, ["5","5","4","3","B","B","D","B","M","KH"], ["1"]*10)   # DP 43 vs 10
+# DP set 2: 2,2,1,1,1,M,M,M,M,M = 7 ; DO 30 -> DP loses this one
+fillD(1, ["2","2","1","1","1","M","M","M","M","M"], ["3"]*10)
+
+with app.app_context():
+    det = statsmod.player_detail(db.get_db(), sidD, pidD["DP"])
+ok(det and not det["empty"], "player detail computed")
+ok(det["reg"]["sets"] == 2 and det["reg"]["points"] == 50
+   and det["reg"]["throws"] == 20,
+   f"core totals correct (got {det['reg']['points']} pts)")
+mixmap = {m["outcome"]: m for m in det["mix"]}
+ok(mixmap["5"]["count"] == 2 and abs(mixmap["5"]["pct"] - 10.0) < 1e-9,
+   "throw mix counts and percentages (two 5s = 10%)")
+ok(mixmap["B"]["count"] == 3 and mixmap["M"]["count"] == 6
+   and mixmap["KH"]["count"] == 1 and mixmap["D"]["count"] == 1,
+   "full outcome breakdown correct")
+# lane split: first-half pts = 5+5+4+3+6 + 2+2+1+1+1 = 30 over 10 throws
+ok(abs(det["lane"]["first"]["ppt"] - 3.0) < 1e-9
+   and abs(det["lane"]["second"]["ppt"] - 2.0) < 1e-9,
+   "before/after lane-swap split computed")
+ok(det["best_streak"] == 2, "longest bullseye streak (B,B)")
+ok(det["best"]["total"] == 43 and det["worst"]["total"] == 7,
+   "best and toughest sets identified")
+h2 = det["h2h"][0]
+ok(h2["n"] == 2 and h2["w"] == 1 and h2["l"] == 1
+   and abs(h2["avg_for"] - 25.0) < 1e-9 and abs(h2["avg_against"] - 20.0) < 1e-9,
+   "head-to-head record and averages")
+comp = {cc["label"]: cc for cc in det["comps"]}
+ok(comp["Average / set"]["rank"] == 1 and comp["Average / set"]["of"] == 2,
+   "league rank computed (DP #1 of 2 on average)")
+ok(comp["Drop rate"]["rank"] == 2,
+   "drop rate ranked with lower-is-better ordering")
+ok(det["po"] is None, "no playoff section without playoff data")
+
+# page renders for viewers, dropdown grouped by team
+r = c.get(f"/season/{sidD}/player-stats?player={pidD['DP']}")
+ok(r.status_code == 200 and b"Throw Mix" in r.data
+   and b"Head to Head" in r.data,
+   "detail page core sections render")
+ok(b"Before &amp; After the Lane Swap" in r.data
+   and b"How They Compare" in r.data,
+   "detail page sections render")
+ok(b'<optgroup label="Ash">' in r.data, "player picker grouped by team")
+r = c.get(f"/season/{sidD}/player-stats")
+ok(b"Pick a player" in r.data, "no-selection state renders")
+c.post("/logout"); c.post("/login", data={"role": "viewer"})
+ok(c.get(f"/season/{sidD}/player-stats?player={pidD['DP']}").status_code == 200,
+   "viewer can browse detailed stats")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+r = c.get(f"/season/{sidD}/stats")
+ok(b"Detailed player stats" in r.data, "stats page links to the detail page")
+c.post(f"/season/{sidD}/delete")
+
 # --- projector ---
 c.post("/seasons", data={"name": "Proj Season"})
 sidP = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

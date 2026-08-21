@@ -365,3 +365,228 @@ def weekly_high_scores(db, season_id):
             "holders": holders(b[1]),
         })
     return out
+
+
+# ------------------------------------------------------------ player detail
+
+OUTCOME_ORDER = ["B", "5", "4", "3", "2", "1", "KH", "KM", "KD", "D", "M"]
+OUTCOME_LABELS = {
+    "B": "Bullseye (6)", "5": "5", "4": "4", "3": "3", "2": "2", "1": "1",
+    "KH": "Killshot hit (8)", "KM": "Killshot miss", "KD": "Killshot drop",
+    "D": "Drop", "M": "Miss",
+}
+
+
+def _rank(values, mine, reverse=True):
+    """1-based rank of `mine` among values (ties share the better rank)."""
+    if mine is None:
+        return None, len(values)
+    better = sum(1 for v in values
+                 if v is not None and ((v > mine) if reverse else (v < mine)))
+    return better + 1, len([v for v in values if v is not None])
+
+
+def player_detail(db, season_id, player_id):
+    p = db.execute(
+        """SELECT p.id, p.name, t.name AS team_name, t.id AS team_id
+           FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id=?""",
+        (player_id,)).fetchone()
+    if not p:
+        return None
+
+    rows = db.execute(
+        """SELECT m.id AS mid, m.week, m.stage, g.game_number AS gn,
+                  s.set_number AS sn, s.id AS set_id,
+                  CASE WHEN s.home_player_id=:pid THEN 'home' ELSE 'away' END
+                      AS side,
+                  s.home_player_id, s.away_player_id,
+                  m.home_team_id, m.away_team_id,
+                  t.throw_number, t.outcome, t.points
+           FROM sets s
+           JOIN games g ON g.id=s.game_id
+           JOIN matches m ON m.id=g.match_id
+           JOIN throws t ON t.set_id=s.id AND t.player_id=:pid
+           WHERE m.season_id=:sid
+             AND :pid IN (s.home_player_id, s.away_player_id)
+           ORDER BY CASE m.stage WHEN 'regular' THEN 0 ELSE 1 END,
+                    COALESCE(m.week, 9999), m.id, g.game_number,
+                    s.set_number, t.throw_number""",
+        {"pid": player_id, "sid": season_id}).fetchall()
+
+    sets_ = {}
+    order = []
+    for r in rows:
+        k = r["set_id"]
+        if k not in sets_:
+            opp_pid = (r["away_player_id"] if r["side"] == "home"
+                       else r["home_player_id"])
+            opp_tid = (r["away_team_id"] if r["side"] == "home"
+                       else r["home_team_id"])
+            sets_[k] = {"set_id": k, "mid": r["mid"], "week": r["week"],
+                        "stage": r["stage"], "gn": r["gn"], "sn": r["sn"],
+                        "opp_pid": opp_pid, "opp_tid": opp_tid,
+                        "seq": [], "pts": []}
+            order.append(k)
+        sets_[k]["seq"].append(r["outcome"])
+        sets_[k]["pts"].append(r["points"])
+    all_sets = [sets_[k] for k in order]
+    reg_sets = [s for s in all_sets if s["stage"] == "regular"]
+    if not all_sets:
+        return {"player": dict(p), "empty": True}
+
+    # opponent totals + names for the same sets
+    opp_totals = {}
+    for r in db.execute(
+            """SELECT t.set_id, SUM(t.points) AS tot FROM throws t
+               JOIN sets s ON s.id=t.set_id
+               WHERE t.set_id IN ({q}) AND t.player_id != ?
+                 AND t.player_id IN (s.home_player_id, s.away_player_id)
+               GROUP BY t.set_id""".format(
+                   q=",".join("?" * len(order))),
+            (*order, player_id)).fetchall():
+        opp_totals[r["set_id"]] = r["tot"]
+    names = {r["id"]: r["name"] for r in db.execute(
+        "SELECT p.id, p.name FROM players p JOIN teams t ON t.id=p.team_id"
+        " WHERE t.season_id=?", (season_id,)).fetchall()}
+    team_names = {r["id"]: r["name"] for r in db.execute(
+        "SELECT id, name FROM teams WHERE season_id=?", (season_id,))}
+
+    def agg(subset):
+        totals = [sum(s["pts"]) for s in subset]
+        seq_all = [o for s in subset for o in s["seq"]]
+        n = len(seq_all)
+        ks_att = sum(1 for o in seq_all if o in ("KH", "KM", "KD"))
+        non_ks = n - ks_att
+        bulls = seq_all.count("B")
+        drops = seq_all.count("D") + seq_all.count("KD")
+        mean = sum(totals) / len(totals) if totals else None
+        var = (sum((t - mean) ** 2 for t in totals) / len(totals)
+               if totals and len(totals) > 1 else 0)
+        return {
+            "sets": len(subset), "points": sum(totals), "throws": n,
+            "avg": mean, "high": max(totals) if totals else None,
+            "low": min(totals) if totals else None,
+            "fifty": sum(1 for t in totals if t >= 50),
+            "fifty_pct": (100 * sum(1 for t in totals if t >= 50)
+                          / len(totals)) if totals else None,
+            "bulls": bulls,
+            "bull_pct": (100 * bulls / non_ks) if non_ks else None,
+            "drops": drops,
+            "drop_pct": (100 * drops / n) if n else None,
+            "ks_att": ks_att, "ks_hit": seq_all.count("KH"),
+            "kill_pct": (100 * seq_all.count("KH") / ks_att)
+                        if ks_att else None,
+            "ppt": (sum(totals) / n) if n else None,
+            "stdev": var ** 0.5 if totals else None,
+        }
+
+    reg = agg(reg_sets)
+    po = agg([s for s in all_sets if s["stage"] == "playoff"]) \
+        if any(s["stage"] == "playoff" for s in all_sets) else None
+
+    # throw mix (regular season)
+    seq_all = [o for s in reg_sets for o in s["seq"]]
+    mix = [{"outcome": o, "label": OUTCOME_LABELS[o],
+            "count": seq_all.count(o),
+            "pct": (100 * seq_all.count(o) / len(seq_all)) if seq_all else 0}
+           for o in OUTCOME_ORDER]
+
+    # lane split: throws 1-5 vs 6-10
+    def half(sl):
+        pts = [p_ for s in reg_sets for p_ in s["pts"][sl]]
+        seq = [o for s in reg_sets for o in s["seq"][sl]]
+        ks = sum(1 for o in seq if o in ("KH", "KM", "KD"))
+        return {"throws": len(seq),
+                "ppt": (sum(pts) / len(pts)) if pts else None,
+                "bull_pct": (100 * seq.count("B") / (len(seq) - ks))
+                            if (len(seq) - ks) else None}
+    lane = {"first": half(slice(0, 5)), "second": half(slice(5, 10))}
+
+    # longest bullseye streak (within a set)
+    best_streak = 0
+    for s in reg_sets:
+        run = 0
+        for o in s["seq"]:
+            run = run + 1 if o == "B" else 0
+            best_streak = max(best_streak, run)
+
+    # form: last 5 regular sets vs season average
+    last5 = [sum(s["pts"]) for s in reg_sets[-5:]]
+    form = {"n": len(last5),
+            "avg": (sum(last5) / len(last5)) if last5 else None}
+
+    # head-to-head vs opposing throwers (regular season)
+    h2h = {}
+    for s in reg_sets:
+        me, them = sum(s["pts"]), opp_totals.get(s["set_id"])
+        if s["opp_pid"] is None or them is None:
+            continue
+        d = h2h.setdefault(s["opp_pid"], {"w": 0, "l": 0, "t": 0,
+                                          "for": 0, "against": 0, "n": 0})
+        d["n"] += 1
+        d["for"] += me
+        d["against"] += them
+        if me > them:
+            d["w"] += 1
+        elif me < them:
+            d["l"] += 1
+        else:
+            d["t"] += 1
+    h2h_rows = sorted(
+        ({"name": names.get(pid, "?"), **d,
+          "avg_for": d["for"] / d["n"], "avg_against": d["against"] / d["n"]}
+         for pid, d in h2h.items()),
+        key=lambda r: (-r["n"], r["name"].lower()))
+
+    # best / worst sets with context
+    def setline(s):
+        return {"total": sum(s["pts"]), "week": s["week"], "stage": s["stage"],
+                "gn": s["gn"], "sn": s["sn"], "mid": s["mid"],
+                "opp": names.get(s["opp_pid"]),
+                "opp_team": team_names.get(s["opp_tid"], "?")}
+    best = setline(max(reg_sets, key=lambda s: sum(s["pts"]))) if reg_sets else None
+    worst = setline(min(reg_sets, key=lambda s: sum(s["pts"]))) if reg_sets else None
+
+    # league comparisons + ranks (regular season, players with data)
+    league = [q for q in player_season_stats(db, season_id, stage="regular")
+              if q["sets"]]
+    def lv(key):
+        return [q[key] for q in league]
+    def lmean(key):
+        vals = [v for v in lv(key) if v is not None]
+        return sum(vals) / len(vals) if vals else None
+    comps = []
+    for key, label, reverse in (
+            ("avg", "Average / set", True),
+            ("high", "High score", True),
+            ("bull_pct", "Bullseye %", True),
+            ("kill_pct", "Killshot %", True),
+            ("drop_pct", "Drop rate", False)):
+        mine = reg[key if key != "avg" else "avg"]
+        rank, of = _rank(lv(key), mine, reverse)
+        comps.append({"label": label, "mine": mine, "league": lmean(key),
+                      "rank": rank, "of": of, "reverse": reverse,
+                      "pct": key.endswith("_pct")})
+
+    # per-round averages: player vs league
+    pr_cols, pr_rows = player_weekly_averages(db, season_id)
+    my_weeks = next((r["weeks"] for r in pr_rows if r["name"] == p["name"]), {})
+    lg_weeks = {}
+    for col in pr_cols:
+        vals = [r["weeks"][col["key"]] for r in pr_rows
+                if col["key"] in r["weeks"]]
+        if vals:
+            lg_weeks[col["key"]] = sum(vals) / len(vals)
+    rounds = [{"label": col["label"],
+               "mine": my_weeks.get(col["key"]),
+               "league": lg_weeks.get(col["key"])} for col in pr_cols]
+
+    achievements = db.execute(
+        "SELECT key FROM achievements WHERE season_id=? AND player_id=?"
+        " ORDER BY earned_at", (season_id, player_id)).fetchall()
+
+    return {"player": dict(p), "empty": False, "reg": reg, "po": po,
+            "mix": mix, "lane": lane, "best_streak": best_streak,
+            "form": form, "h2h": h2h_rows, "best": best, "worst": worst,
+            "comps": comps, "rounds": rounds,
+            "achievement_keys": [r["key"] for r in achievements]}
