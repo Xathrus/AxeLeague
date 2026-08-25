@@ -37,14 +37,24 @@ PRESETS = {
             "gold":  "#d94a4a",   # bold red accent
         },
     },
-    "wildcat": {
-        "label": "Wildcat (Purple & White)",
+    "wildcat_light": {
+        "label": "Wildcat Light (Purple & White)",
         "colors": {
             "bg":    "#ffffff",   # white
             "panel": "#f2ecf8",   # whisper of Primrose Purple
             "line":  "#cca6cd",   # Lavender Purple
             "ink":   "#21174b",   # Midnight Purple
             "gold":  "#4f2170",   # Wildcat Purple accent
+        },
+    },
+    "wildcat_dark": {
+        "label": "Wildcat Dark (Purple & White)",
+        "colors": {
+            "bg":    "#170f33",   # deep midnight
+            "panel": "#241a56",   # Midnight Purple, lifted
+            "line":  "#4f2170",   # Wildcat Purple borders
+            "ink":   "#ffffff",   # white
+            "gold":  "#cca6cd",   # Lavender Purple accent
         },
     },
 }

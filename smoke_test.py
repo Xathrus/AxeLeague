@@ -1322,15 +1322,22 @@ ok(all(p["name"] != "Guest Thrower"
 c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
 c.post(f"/season/{sidG}/delete")
 
-# wildcat branding preset
-r = c.post("/branding/preset", data={"preset": "wildcat"}, follow_redirects=True)
+# wildcat branding presets — light and dark
+r = c.post("/branding/preset", data={"preset": "wildcat_light"},
+           follow_redirects=True)
 css_r = c.get("/").data.decode()  # theme vars are inlined in base.html
 ok("--gold: #4f2170" in css_r and "--ink: #21174b" in css_r
    and "--bg: #ffffff" in css_r,
-   "Wildcat preset applies purple-and-white palette")
-ok(b"Wildcat (Purple &amp; White)" in c.get("/branding").data
-   or b"Wildcat (Purple & White)" in c.get("/branding").data,
-   "Wildcat preset listed on the branding page")
+   "Wildcat Light: white background, purple ink and accent")
+r = c.post("/branding/preset", data={"preset": "wildcat_dark"},
+           follow_redirects=True)
+css_r = c.get("/").data.decode()
+ok("--bg: #170f33" in css_r and "--ink: #ffffff" in css_r
+   and "--line: #4f2170" in css_r and "--gold: #cca6cd" in css_r,
+   "Wildcat Dark: midnight background, white ink, purple structure")
+bp = c.get("/branding").data
+ok(b"Wildcat Light" in bp and b"Wildcat Dark" in bp,
+   "both Wildcat presets listed on the branding page")
 c.post("/branding/preset", data={"preset": "classic"})
 
 # --- projector ---
