@@ -37,6 +37,16 @@ PRESETS = {
             "gold":  "#d94a4a",   # bold red accent
         },
     },
+    "wildcat": {
+        "label": "Wildcat (Purple & White)",
+        "colors": {
+            "bg":    "#ffffff",   # white
+            "panel": "#f2ecf8",   # whisper of Primrose Purple
+            "line":  "#cca6cd",   # Lavender Purple
+            "ink":   "#21174b",   # Midnight Purple
+            "gold":  "#4f2170",   # Wildcat Purple accent
+        },
+    },
 }
 LOGO_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
 LOGO_DIR = os.path.join(os.path.dirname(dbmod.DB_PATH), "branding")

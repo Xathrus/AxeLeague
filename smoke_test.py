@@ -1217,6 +1217,122 @@ r = c.get(f"/season/{sidD}/stats")
 ok(b"Detailed player stats" in r.data, "stats page links to the detail page")
 c.post(f"/season/{sidD}/delete")
 
+# --- schedule cycles, season settings, add-player, guests, wildcat ---
+c.post("/seasons", data={"name": "Cyc Season"})
+sidC = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("C1", "C2", "C3"):
+    c.post(f"/season/{sidC}/teams", data={"name": t})
+c.post(f"/season/{sidC}/schedule/generate", data={"cycles": "3"})
+nm = q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sidC)[0]["n"]
+ok(nm == 9, f"3 teams x 3 cycles -> 9 matches (got {nm})")
+c.post(f"/season/{sidC}/schedule/reset")
+c.post(f"/season/{sidC}/schedule/generate", data={"cycles": "1"})
+ok(q("SELECT COUNT(*) n FROM matches WHERE season_id=?", sidC)[0]["n"] == 3,
+   "single round robin -> 3 matches")
+c.post(f"/season/{sidC}/delete")
+
+c.post("/seasons", data={"name": "Guest Season"})
+sidG = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("Elms", "Firs"):
+    c.post(f"/season/{sidG}/teams", data={"name": t})
+tidG = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidG)}
+c.post(f"/team/{tidG['Elms']}/players", data={"name": "E1"})
+c.post(f"/team/{tidG['Firs']}/players", data={"name": "F1"})
+pidG = {r["name"]: r["id"] for r in q(
+    "SELECT p.id, p.name FROM players p JOIN teams t ON p.team_id=t.id"
+    " WHERE t.season_id=?", sidG)}
+c.post(f"/season/{sidG}/schedule/generate")
+gm = q("SELECT id FROM matches WHERE season_id=? LIMIT 1", sidG)[0]["id"]
+gst = state(gm)
+gsets = sets_of(gm)
+gs0, gs1 = gsets[0]["id"], gsets[1]["id"]
+home_is_elms = gst["match"]["home_team_id"] == tidG["Elms"]
+
+# settings default off; scorekeeper blocked from both features
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = post_json(f"/api/set/{gs0}/add_player", {"side": "home", "name": "Newbie"})
+ok(r.status_code == 403, "add-player blocked while the setting is off")
+r = post_json(f"/api/set/{gs0}/assign_guest", {"side": "home"})
+ok(r.status_code == 403, "guest blocked while the setting is off")
+
+# viewer can't flip settings; admin can
+r = c.post(f"/season/{sidG}/settings",
+           data={"allow_sk_add_players": "on", "allow_guests": "on"})
+ok(r.status_code in (302, 303) and "/login" in r.headers["Location"],
+   "scorekeeper cannot change season settings")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+c.post(f"/season/{sidG}/settings",
+       data={"allow_sk_add_players": "on", "allow_guests": "on"})
+srow = q("SELECT allow_sk_add_players, allow_guests FROM seasons WHERE id=?",
+         sidG)[0]
+ok(srow["allow_sk_add_players"] == 1 and srow["allow_guests"] == 1,
+   "settings persisted")
+ok(b"checked" in c.get(f"/season/{sidG}").data,
+   "settings render checked on the season page")
+
+# scorekeeper adds a player on the fly, assigned immediately
+c.post("/logout"); c.post("/login", data={"role": "scorekeeper", "password": "skpw"})
+r = post_json(f"/api/set/{gs0}/add_player", {"side": "home", "name": "Newbie"})
+ok(r.status_code == 200 and not r.get_json()["existing"],
+   "scorekeeper added a player with the setting on")
+new_pid = r.get_json()["player_id"]
+gs = state(gm)["games"][0]["sets"][0]
+ok(gs["home_player_id"] == new_pid, "new player assigned to the set")
+ok(q("SELECT team_id FROM players WHERE id=?", new_pid)[0]["team_id"]
+   == gst["match"]["home_team_id"], "player created on the right team")
+r = post_json(f"/api/set/{gs1}/add_player", {"side": "home", "name": "NEWBIE"})
+ok(r.status_code == 200 and r.get_json()["existing"]
+   and r.get_json()["player_id"] == new_pid,
+   "same name (case-insensitive) reuses the player instead of duplicating")
+
+# guest thrower: counts for the team, invisible in individual stats
+r = post_json(f"/api/set/{gs0}/assign_guest", {"side": "away"})
+ok(r.status_code == 200, "guest assigned")
+guest_pid = r.get_json()["player_id"]
+ok(q("SELECT is_guest FROM players WHERE id=?", guest_pid)[0]["is_guest"] == 1,
+   "guest flagged in the roster")
+away_pid_real = pidG["F1"] if home_is_elms else pidG["E1"]
+throw(gs0, new_pid, "5")
+for o in ("B", "3"):
+    throw(gs0, guest_pid, o)
+gs = state(gm)["games"][0]["sets"][0]
+ok(gs["away_total"] == 9 and gs["away_player_name"] == "Guest Thrower",
+   "guest throws count toward the set/team score")
+with app.app_context():
+    d0 = db.get_db()
+    ind = {p["name"] for p in statsmod.player_season_stats(d0, sidG, stage="regular")}
+    team_rows = {t["name"]: (t["avg"], t["high"]) for t in
+                 statsmod.team_season_stats(d0, sidG, stage="regular")}
+ok("Guest Thrower" not in ind, "guest absent from individual stats")
+away_team_name = "Firs" if home_is_elms else "Elms"
+ok(team_rows[away_team_name] == (9.0, 9),
+   "guest points included in TEAM stats (their 9-point set counts)")
+ok(q("SELECT COUNT(*) n FROM achievements WHERE season_id=? AND player_id=?",
+     sidG, guest_pid)[0]["n"] == 0, "guests earn no personal achievements")
+r = c.get(f"/season/{sidG}/player-stats")
+ok(b"Guest Thrower" not in r.data, "guest not offered in detailed-stats picker")
+ok(b"Guest Thrower" not in c.get(f"/season/{sidG}/teams").data,
+   "guest hidden from the roster page")
+# guest option not offered by rosters for normal assignment
+ok(all(p["name"] != "Guest Thrower"
+       for sside in ("home", "away")
+       for p in state(gm)["rosters"][sside]),
+   "guest not in the normal thrower picker roster")
+c.post("/logout"); c.post("/login", data={"role": "admin", "password": "adminpw"})
+c.post(f"/season/{sidG}/delete")
+
+# wildcat branding preset
+r = c.post("/branding/preset", data={"preset": "wildcat"}, follow_redirects=True)
+css_r = c.get("/").data.decode()  # theme vars are inlined in base.html
+ok("--gold: #4f2170" in css_r and "--ink: #21174b" in css_r
+   and "--bg: #ffffff" in css_r,
+   "Wildcat preset applies purple-and-white palette")
+ok(b"Wildcat (Purple &amp; White)" in c.get("/branding").data
+   or b"Wildcat (Purple & White)" in c.get("/branding").data,
+   "Wildcat preset listed on the branding page")
+c.post("/branding/preset", data={"preset": "classic"})
+
 # --- projector ---
 c.post("/seasons", data={"name": "Proj Season"})
 sidP = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]

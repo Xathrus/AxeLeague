@@ -84,7 +84,8 @@ def compute_match_state(db, match_id):
             rosters[side] = [
                 {"id": p["id"], "name": p["name"]}
                 for p in db.execute(
-                    "SELECT * FROM players WHERE team_id=? ORDER BY name", (tid,)
+                    "SELECT * FROM players WHERE team_id=? AND is_guest=0"
+                    " ORDER BY name", (tid,)
                 ).fetchall()
             ]
 

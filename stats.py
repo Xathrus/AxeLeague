@@ -2,13 +2,15 @@
 from collections import defaultdict
 
 
-def _player_set_rows(db, season_id, stage=None):
+def _player_set_rows(db, season_id, stage=None, include_guests=False):
     """One row per (player, set) with totals and counts.
 
     stage=None -> all matches; 'regular' or 'playoff' filters by match stage.
     """
     extra = " AND m.stage = ?" if stage else ""
-    args = (season_id, stage) if stage else (season_id,)
+    args = [season_id] + ([stage] if stage else [])
+    if not include_guests:
+        extra += " AND pl.is_guest = 0"
     return db.execute(
         """
         SELECT t.player_id,
@@ -24,6 +26,7 @@ def _player_set_rows(db, season_id, stage=None):
                SUM(t.outcome IN ('KH','KD','KM')) AS ks_att,
                SUM(t.outcome = 'KH') AS ks_hit
         FROM throws t
+        JOIN players pl ON pl.id = t.player_id
         JOIN sets s    ON s.id = t.set_id
         JOIN games g   ON g.id = s.game_id
         JOIN matches m ON m.id = g.match_id
@@ -38,7 +41,8 @@ def _players(db, season_id):
     return db.execute(
         """SELECT p.id, p.name, p.team_id, tm.name AS team_name
            FROM players p JOIN teams tm ON tm.id = p.team_id
-           WHERE tm.season_id = ? ORDER BY tm.name, p.name""",
+           WHERE tm.season_id = ? AND p.is_guest = 0
+           ORDER BY tm.name, p.name""",
         (season_id,),
     ).fetchall()
 
@@ -136,8 +140,11 @@ def player_weekly_averages(db, season_id):
 
 
 def team_season_stats(db, season_id, stage=None):
-    rows = _player_set_rows(db, season_id, stage)
-    players = {p["id"]: p for p in _players(db, season_id)}
+    rows = _player_set_rows(db, season_id, stage, include_guests=True)
+    players = {p["id"]: p for p in db.execute(
+        """SELECT p.id, p.team_id FROM players p
+           JOIN teams tm ON tm.id = p.team_id WHERE tm.season_id = ?""",
+        (season_id,)).fetchall()}
     teams = db.execute(
         "SELECT * FROM teams WHERE season_id=? ORDER BY name", (season_id,)
     ).fetchall()

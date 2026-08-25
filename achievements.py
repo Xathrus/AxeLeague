@@ -127,6 +127,9 @@ def _load(db, season_id):
     """Season snapshot: ordered matches with games/sets/side data."""
     teams = {r["id"]: r["name"] for r in db.execute(
         "SELECT id, name FROM teams WHERE season_id=?", (season_id,))}
+    guests = {r["id"] for r in db.execute(
+        """SELECT p.id FROM players p JOIN teams t ON t.id=p.team_id
+           WHERE t.season_id=? AND p.is_guest=1""", (season_id,))}
     matches = [dict(m) for m in db.execute(
         """SELECT * FROM matches WHERE season_id=?
            ORDER BY CASE stage WHEN 'regular' THEN 0 ELSE 1 END,
@@ -162,7 +165,7 @@ def _load(db, season_id):
         side["total"] += r["points"]
     for m in matches:
         m["games"] = by_match.get(m["id"], {})
-    return teams, matches
+    return teams, matches, guests
 
 
 def _side_stats(side):
@@ -179,12 +182,14 @@ def _side_stats(side):
 # --------------------------------------------------------------- detection
 
 def _detect(db, season_id):
-    teams, matches = _load(db, season_id)
+    teams, matches, guests = _load(db, season_id)
     facts = []
     awarded = set()  # (key, subject) — every achievement is once per season
 
     def add(key, uniq, player_id=None, team_id=None, match_id=None,
             gn=None, sn=None, detail=None):
+        if player_id and player_id in guests:
+            return  # guest throwers earn no personal achievements
         subject = ("p", player_id) if player_id else ("t", team_id)
         if (key, subject) in awarded:
             return

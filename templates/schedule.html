@@ -5,9 +5,17 @@
 <h1 class="page-title">Schedule <span class="muted-small">{{ season.name }}</span></h1>
 
 {% if not weeks %}
-<p class="muted">No schedule yet. Generating creates a double round robin — every team plays every other team twice, one round at a time.</p>
+<p class="muted">No schedule yet. Pick how many times each team should face every other team, then generate — matches are laid out one round at a time with home/away alternating each cycle.</p>
 {% if can_edit %}
-<form method="post" action="{{ url_for('generate_schedule', season_id=season.id) }}">
+<form method="post" action="{{ url_for('generate_schedule', season_id=season.id) }}" class="inline-form">
+  <label>Each team plays every other team
+    <select name="cycles">
+      <option value="1">once</option>
+      <option value="2" selected>twice</option>
+      <option value="3">3 times</option>
+      <option value="4">4 times</option>
+    </select>
+  </label>
   <button type="submit">Generate schedule</button>
 </form>
 {% else %}

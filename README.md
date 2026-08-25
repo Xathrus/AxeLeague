@@ -9,6 +9,8 @@ Python + Flask + SQLite, no internet required, runs on your local network.
 - **Logins & roles** — on first start the app prompts you to create Admin and
   Scorekeeper passwords. Admin has full access; Scorekeeper can score and edit
   matches only; "View Games & Stats" needs no password and is read-only
+- **Season settings** — per-season admin toggles: let scorekeepers add players on the fly from the scoring screen, and allow Guest Throwers whose scores count for the team but never appear in individual stats or achievements
+- **Flexible scheduling** — choose how many times each team plays every other team (1–4 cycles) when generating the schedule, with home/away alternating each cycle
 - **Season export / import** — download any season as a portable JSON file and import it into this or another installation (teams, rosters, schedule, bracket wiring, and every throw come across)
 - **Seasons, teams, rosters** — create/rename/delete seasons, add teams and
   players (or copy all teams and rosters from a previous season in one click), rename players anytime; reset the schedule to bring new teams in

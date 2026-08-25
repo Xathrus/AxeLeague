@@ -277,6 +277,19 @@ def import_season():
     return redirect(url_for("season_home", season_id=sid))
 
 
+@app.post("/season/<int:season_id>/settings")
+@admin_required
+def season_settings(season_id):
+    _season_or_404(season_id)
+    db = get_db()
+    db.execute(
+        "UPDATE seasons SET allow_sk_add_players=?, allow_guests=? WHERE id=?",
+        (1 if request.form.get("allow_sk_add_players") else 0,
+         1 if request.form.get("allow_guests") else 0, season_id))
+    db.commit()
+    return redirect(url_for("season_home", season_id=season_id))
+
+
 @app.post("/season/<int:season_id>/rename")
 @admin_required
 def rename_season(season_id):
@@ -399,7 +412,8 @@ def teams_page(season_id):
                        (season_id,)).fetchall()
     players = db.execute(
         """SELECT p.* FROM players p JOIN teams t ON t.id=p.team_id
-           WHERE t.season_id=? ORDER BY p.name""", (season_id,)).fetchall()
+           WHERE t.season_id=? AND p.is_guest=0
+           ORDER BY p.name""", (season_id,)).fetchall()
     by_team = {}
     for p in players:
         by_team.setdefault(p["team_id"], []).append(p)
@@ -583,8 +597,9 @@ def generate_schedule(season_id):
         "SELECT COUNT(*) c FROM matches WHERE season_id=? AND stage='regular'",
         (season_id,)).fetchone()["c"]
     if not existing:
+        cycles = request.form.get("cycles", 2, type=int)
         try:
-            bracket_mod.generate_double_round_robin(db, season_id)
+            bracket_mod.generate_double_round_robin(db, season_id, cycles)
             db.commit()
         except ValueError:
             db.rollback()
@@ -759,7 +774,8 @@ def player_stats_page(season_id):
         (season_id,)).fetchall()
     roster = db.execute(
         """SELECT p.id, p.name, p.team_id FROM players p
-           JOIN teams t ON t.id=p.team_id WHERE t.season_id=?
+           JOIN teams t ON t.id=p.team_id
+           WHERE t.season_id=? AND p.is_guest=0
            ORDER BY p.name""", (season_id,)).fetchall()
     pid = request.args.get("player", type=int)
     detail = None
@@ -932,6 +948,86 @@ def api_reset_set(set_id):
     return jsonify({"ok": True})
 
 
+def _set_season(db, set_id):
+    return db.execute(
+        """SELECT s.*, m.id AS mid, m.completed, m.season_id,
+                  m.home_team_id, m.away_team_id,
+                  se.allow_sk_add_players, se.allow_guests
+           FROM sets s JOIN games g ON g.id=s.game_id
+           JOIN matches m ON m.id=g.match_id
+           JOIN seasons se ON se.id=m.season_id WHERE s.id=?""",
+        (set_id,)).fetchone()
+
+
+@app.post("/api/set/<int:set_id>/add_player")
+@scorekeeper_required
+def api_add_player_to_set(set_id):
+    """Create a new player on one side's team and assign them to this set —
+    only when the season setting allows scorekeepers to add players."""
+    db = get_db()
+    row = _set_season(db, set_id)
+    if not row:
+        return _err("Set not found", 404)
+    if not row["allow_sk_add_players"] and session.get("role") != "admin":
+        return _err("Adding players is not enabled for this season. "
+                    "An admin can turn it on in the season settings.", 403)
+    if row["completed"]:
+        return _err("Match is completed. Reopen it to make changes.")
+    data = request.get_json(silent=True) or {}
+    side = data.get("side")
+    name = (data.get("name") or "").strip()
+    if side not in ("home", "away") or not name:
+        return _err("Provide a side and a player name.")
+    team_id = row[side + "_team_id"]
+    dup = db.execute(
+        "SELECT id FROM players WHERE team_id=? AND lower(name)=lower(?)"
+        " AND is_guest=0", (team_id, name)).fetchone()
+    pid = dup["id"] if dup else db.execute(
+        "INSERT INTO players (team_id, name) VALUES (?, ?)",
+        (team_id, name)).lastrowid
+    db.execute(f"UPDATE sets SET {side}_player_id=? WHERE id=?", (pid, set_id))
+    ach.recompute(db, row["season_id"])
+    db.commit()
+    return jsonify({"ok": True, "player_id": pid, "existing": bool(dup)})
+
+
+@app.post("/api/set/<int:set_id>/assign_guest")
+@scorekeeper_required
+def api_assign_guest(set_id):
+    """Assign the team's guest thrower to this set — scores count for the
+    team, but guests never appear in individual stats or achievements."""
+    db = get_db()
+    row = _set_season(db, set_id)
+    if not row:
+        return _err("Set not found", 404)
+    if not row["allow_guests"]:
+        return _err("Guest throwers are not enabled for this season. "
+                    "An admin can turn it on in the season settings.", 403)
+    if row["completed"]:
+        return _err("Match is completed. Reopen it to make changes.")
+    data = request.get_json(silent=True) or {}
+    side = data.get("side")
+    if side not in ("home", "away"):
+        return _err("Provide a side.")
+    team_id = row[side + "_team_id"]
+    g = db.execute("SELECT id FROM players WHERE team_id=? AND is_guest=1"
+                   " LIMIT 1", (team_id,)).fetchone()
+    pid = g["id"] if g else db.execute(
+        "INSERT INTO players (team_id, name, is_guest) VALUES (?, ?, 1)",
+        (team_id, "Guest Thrower")).lastrowid
+    current = row[side + "_player_id"]
+    if current and current != pid:
+        n = db.execute("SELECT COUNT(*) c FROM throws WHERE set_id=?"
+                       " AND player_id=?", (set_id, current)).fetchone()["c"]
+        if n:
+            db.execute("UPDATE throws SET player_id=? WHERE set_id=?"
+                       " AND player_id=?", (pid, set_id, current))
+    db.execute(f"UPDATE sets SET {side}_player_id=? WHERE id=?", (pid, set_id))
+    ach.recompute(db, row["season_id"])
+    db.commit()
+    return jsonify({"ok": True, "player_id": pid})
+
+
 @app.post("/api/set/<int:set_id>/swap_scores")
 @scorekeeper_required
 def api_swap_set_scores(set_id):
@@ -1023,7 +1119,9 @@ def match_page(match_id):
     db = get_db()
     home = db.execute("SELECT name FROM teams WHERE id=?", (m["home_team_id"],)).fetchone()
     away = db.execute("SELECT name FROM teams WHERE id=?", (m["away_team_id"],)).fetchone()
-    return render_template("match.html", match=m,
+    season = db.execute("SELECT * FROM seasons WHERE id=?",
+                        (m["season_id"],)).fetchone()
+    return render_template("match.html", match=m, season=season,
                            home_name=home["name"] if home else "TBD",
                            away_name=away["name"] if away else "TBD")
 

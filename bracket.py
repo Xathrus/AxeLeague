@@ -25,18 +25,21 @@ def round_robin_rounds(team_ids):
     return rounds
 
 
-def generate_double_round_robin(db, season_id):
+def generate_double_round_robin(db, season_id, cycles=2):
+    """Round robin repeated `cycles` times; home/away alternates per cycle."""
     teams = [t["id"] for t in db.execute(
         "SELECT id FROM teams WHERE season_id=? ORDER BY id", (season_id,)).fetchall()]
     if len(teams) < 2:
         raise ValueError("Need at least 2 teams to generate a schedule.")
+    if not (1 <= cycles <= 6):
+        raise ValueError("Cycles must be between 1 and 6.")
     week = 0
-    for cycle in (0, 1):
+    for cycle in range(cycles):
         for rnd in round_robin_rounds(teams):
             week += 1
             for home, away in rnd:
-                if cycle == 1:
-                    home, away = away, home  # flip home/away second time around
+                if cycle % 2 == 1:
+                    home, away = away, home  # alternate home/away per cycle
                 cur = db.execute(
                     "INSERT INTO matches (season_id, week, home_team_id, away_team_id, stage)"
                     " VALUES (?,?,?,?, 'regular')",

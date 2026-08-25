@@ -32,6 +32,13 @@
 {% if can_edit %}
 <div class="danger-zone">
   <h2 class="week-head">Admin</h2>
+  <form method="post" action="{{ url_for('season_settings', season_id=season.id) }}" class="settings-form">
+    <label><input type="checkbox" name="allow_sk_add_players" {% if season.allow_sk_add_players %}checked{% endif %}>
+      Allow Scorekeeper to add players</label>
+    <label><input type="checkbox" name="allow_guests" {% if season.allow_guests %}checked{% endif %}>
+      Allow Guest Throwers <span class="muted-small">(count for the team, excluded from individual stats)</span></label>
+    <button type="submit" class="ghost">Save settings</button>
+  </form>
   <form method="post" action="{{ url_for('rename_season', season_id=season.id) }}" class="inline-form">
     <input name="name" value="{{ season.name }}" required>
     <button type="submit">Rename season</button>

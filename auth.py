@@ -44,6 +44,15 @@ def ensure_schema():
                value TEXT NOT NULL
            )"""
     )
+    for stmt in (
+        "ALTER TABLE seasons ADD COLUMN allow_sk_add_players INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE seasons ADD COLUMN allow_guests INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0",
+    ):
+        try:
+            conn.execute(stmt)
+        except sqlite3.OperationalError:
+            pass  # column already exists
     conn.commit()
     conn.close()
 

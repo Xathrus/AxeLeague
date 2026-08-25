@@ -333,8 +333,19 @@
       const sel = el("select", "player-select");
       sel.appendChild(new Option(`Select ${teamName} thrower…`, ""));
       state.rosters[side].forEach(pl => sel.appendChild(new Option(pl.name, pl.id)));
+      if (window.ALLOW_SK_ADD) sel.appendChild(new Option("➕ Add new player…", "__new__"));
+      if (window.ALLOW_GUESTS) sel.appendChild(new Option("🎭 Guest thrower", "__guest__"));
       sel.onchange = () => {
-        if (sel.value) api(`/api/set/${s.id}/assign`, { [side + "_player_id"]: +sel.value });
+        if (sel.value === "__new__") {
+          const name = prompt(`New ${teamName} player's name:`);
+          if (name && name.trim()) {
+            api(`/api/set/${s.id}/add_player`, { side, name: name.trim() });
+          } else { render(); }
+        } else if (sel.value === "__guest__") {
+          api(`/api/set/${s.id}/assign_guest`, { side });
+        } else if (sel.value) {
+          api(`/api/set/${s.id}/assign`, { [side + "_player_id"]: +sel.value });
+        }
       };
       p.appendChild(sel);
       p.appendChild(el("div", "muted-small center", "Pick a thrower to start scoring"));
