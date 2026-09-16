@@ -696,9 +696,14 @@ def create_playoffs(season_id):
         "SELECT COUNT(*) c FROM matches WHERE season_id=? AND stage='playoff'",
         (season_id,)).fetchone()["c"]
     if not existing:
+        fmt = request.form.get("format", "double")
+        if fmt not in ("single", "double"):
+            fmt = "double"
         seeds = [r["team_id"] for r in stats_mod.standings(db, season_id)]
         try:
-            bracket_mod.create_bracket(db, season_id, seeds)
+            bracket_mod.create_bracket(db, season_id, seeds, fmt)
+            db.execute("UPDATE seasons SET playoff_format=? WHERE id=?",
+                       (fmt, season_id))
             ach.recompute(db, season_id)
             db.commit()
         except ValueError:

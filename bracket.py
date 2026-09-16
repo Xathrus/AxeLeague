@@ -65,12 +65,16 @@ def _lb_round_count(size, m):
     return size >> (((m + 1) // 2) + 1)
 
 
-def create_bracket(db, season_id, seeds):
-    """Create a double-elimination bracket. `seeds` is a list of team ids,
-    best seed first. Bracket is padded to the next power of two with byes."""
+def create_bracket(db, season_id, seeds, fmt="double"):
+    """Create a playoff bracket. `seeds` is a list of team ids, best seed
+    first; padded to the next power of two with byes. fmt is "double"
+    (winners + losers brackets + grand final) or "single" (winners bracket
+    only; the last winners round is the final)."""
     n = len(seeds)
     if n < 2:
         raise ValueError("Need at least 2 teams for playoffs.")
+    if fmt not in ("single", "double"):
+        raise ValueError("Unknown playoff format.")
     size = 1
     while size < n:
         size *= 2
@@ -92,6 +96,25 @@ def create_bracket(db, season_id, seeds):
     for r in range(1, R + 1):
         for slot in range(size >> r):
             new_match("W", r, slot)
+
+    if fmt == "single":
+        order = seed_order(size)
+        for slot in range(size // 2):
+            s1, s2 = order[2 * slot], order[2 * slot + 1]
+            home = seeds[s1 - 1] if s1 <= n else None
+            away = seeds[s2 - 1] if s2 <= n else None
+            db.execute("UPDATE matches SET home_team_id=?, away_team_id=?"
+                       " WHERE id=?", (home, away, ids[("W", 1, slot)]))
+        for r in range(1, R):
+            for slot in range(size >> r):
+                db.execute(
+                    "UPDATE matches SET winner_to_match=?, winner_to_pos=?"
+                    " WHERE id=?",
+                    (ids[("W", r + 1, slot // 2)], 1 + slot % 2,
+                     ids[("W", r, slot)]))
+        propagate(db, season_id)
+        return ids[("W", R, 0)]
+
     # Losers bracket
     lb_last = 2 * (R - 1) if R >= 2 else 0
     for m_r in range(1, lb_last + 1):
@@ -229,6 +252,18 @@ def propagate(db, season_id):
 
 def champion(db, season_id):
     """Return champion team id if the bracket is finished, else None."""
+    has_gf = db.execute(
+        "SELECT 1 FROM matches WHERE season_id=? AND stage='playoff'"
+        " AND bracket='GF' LIMIT 1", (season_id,)).fetchone()
+    if not has_gf:
+        # single elimination: the last winners-bracket round is the final
+        final = db.execute(
+            "SELECT * FROM matches WHERE season_id=? AND stage='playoff'"
+            " AND bracket='W' ORDER BY bracket_round DESC LIMIT 1",
+            (season_id,)).fetchone()
+        if final and final["completed"]:
+            return final["winner_team_id"]
+        return None
     gf2 = db.execute(
         "SELECT * FROM matches WHERE season_id=? AND stage='playoff'"
         " AND bracket='GF' AND bracket_round=2", (season_id,)).fetchone()

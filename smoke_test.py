@@ -1,4 +1,5 @@
 """End-to-end smoke test. Run: python smoke_test.py (uses a throwaway DB)."""
+import io
 import json
 import os
 import tempfile
@@ -1339,6 +1340,87 @@ bp = c.get("/branding").data
 ok(b"Wildcat Light" in bp and b"Wildcat Dark" in bp,
    "both Wildcat presets listed on the branding page")
 c.post("/branding/preset", data={"preset": "classic"})
+
+# --- single-elimination playoffs ---
+c.post("/seasons", data={"name": "Single Season"})
+sidS1 = q("SELECT id FROM seasons ORDER BY id DESC LIMIT 1")[0]["id"]
+for t in ("P1", "P2", "P3", "P4", "P5"):
+    c.post(f"/season/{sidS1}/teams", data={"name": t})
+    tid_ = q("SELECT id FROM teams WHERE season_id=? AND name=?", sidS1, t)[0]["id"]
+    c.post(f"/team/{tid_}/players", data={"name": t + "p"})
+tidS1 = {r["name"]: r["id"] for r in q(
+    "SELECT id, name FROM teams WHERE season_id=?", sidS1)}
+# unscored regular season -> standings order is alphabetical (P1..P5 seeds)
+r = c.get(f"/season/{sidS1}/playoffs")
+ok(b'name="format" value="single"' in r.data
+   and b'name="format" value="double" checked' in r.data,
+   "playoff create form offers single/double, double default")
+c.post(f"/season/{sidS1}/playoffs/create", data={"format": "single"})
+ok(q("SELECT playoff_format FROM seasons WHERE id=?", sidS1)[0]["playoff_format"]
+   == "single", "format saved on the season")
+bk = q("SELECT bracket, COUNT(*) n FROM matches WHERE season_id=?"
+       " AND stage='playoff' GROUP BY bracket", sidS1)
+bkm = {r["bracket"]: r["n"] for r in bk}
+ok(bkm == {"W": 7}, f"single elim: 8-slot bracket = 7 W matches, no L/GF (got {bkm})")
+byes = q("SELECT COUNT(*) n FROM matches WHERE season_id=? AND stage='playoff'"
+         " AND bracket_round=1 AND completed=1", sidS1)[0]["n"]
+ok(byes == 3, "three round-1 byes auto-resolved for 5 teams")
+r = c.get(f"/season/{sidS1}/playoffs")
+ok(b"single elimination" in r.data and b"Grand Final" not in r.data
+   and b"Losers Bracket" not in r.data and b"Final" in r.data,
+   "single-elim page: no GF/LB columns, final labelled")
+
+def play_out(mid_):
+    stx = state(mid_)
+    hp_ = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+            stx["match"]["home_team_id"])[0]["id"]
+    ap_ = q("SELECT id FROM players WHERE team_id=? LIMIT 1",
+            stx["match"]["away_team_id"])[0]["id"]
+    for gi in (0, 1):
+        for si in range(3):
+            sx = sets_of(mid_)[gi*3+si]["id"]
+            assign(sx, hp_, ap_)
+            fill(sx, hp_, ap_, ["1"]*10 if si == 0 else ["M"]*10, ["M"]*10)
+    post_json(f"/api/match/{mid_}/complete")
+    return stx["match"]["home_team_id"]
+
+with app.app_context():
+    ok(bmod.champion(db.get_db(), sidS1) is None, "no champion yet")
+# play every real match until the final is done (home team always wins)
+for _ in range(4):
+    pend = q("SELECT id FROM matches WHERE season_id=? AND stage='playoff'"
+             " AND completed=0 AND home_team_id IS NOT NULL"
+             " AND away_team_id IS NOT NULL ORDER BY bracket_round, bracket_slot"
+             " LIMIT 1", sidS1)
+    if not pend:
+        break
+    play_out(pend[0]["id"])
+final = q("SELECT * FROM matches WHERE season_id=? AND stage='playoff'"
+          " ORDER BY bracket_round DESC LIMIT 1", sidS1)[0]
+ok(final["completed"] == 1 and final["bracket_round"] == 3,
+   "final (round 3) completed after four real matches")
+with app.app_context():
+    champ1 = bmod.champion(db.get_db(), sidS1)
+ok(champ1 == final["winner_team_id"], "single-elim champion = final's winner")
+ok(b"League Champions" in c.get(f"/season/{sidS1}/playoffs").data,
+   "champion banner shown")
+ok(q("SELECT COUNT(*) n FROM matches WHERE season_id=? AND stage='playoff'",
+     sidS1)[0]["n"] == 7, "no bracket-reset match ever created in single elim")
+
+# export/import preserves the format
+r = c.get(f"/season/{sidS1}/export")
+doc1 = json.loads(r.data)
+ok(doc1["season"]["playoff_format"] == "single", "export carries playoff format")
+r = c.post("/seasons/import", data={"file": (io.BytesIO(r.data), "s.json")},
+           content_type="multipart/form-data")
+sid_imp = int(r.headers["Location"].rstrip("/").split("/")[-1])
+ok(q("SELECT playoff_format FROM seasons WHERE id=?", sid_imp)[0]["playoff_format"]
+   == "single", "import restores playoff format")
+with app.app_context():
+    ok(bmod.champion(db.get_db(), sid_imp) is not None,
+       "imported single-elim bracket still resolves its champion")
+c.post(f"/season/{sid_imp}/delete")
+c.post(f"/season/{sidS1}/delete")
 
 # --- projector ---
 c.post("/seasons", data={"name": "Proj Season"})

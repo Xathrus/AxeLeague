@@ -48,6 +48,7 @@ def ensure_schema():
         "ALTER TABLE seasons ADD COLUMN allow_sk_add_players INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE seasons ADD COLUMN allow_guests INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE seasons ADD COLUMN playoff_format TEXT NOT NULL DEFAULT 'double'",
     ):
         try:
             conn.execute(stmt)

@@ -71,7 +71,10 @@ def export_season(db, season_id):
         (season_id,)).fetchall()]
     return {
         "format": FORMAT, "version": VERSION,
-        "season": {"name": season["name"]},
+        "season": {"name": season["name"],
+                   "playoff_format": season["playoff_format"],
+                   "allow_sk_add_players": season["allow_sk_add_players"],
+                   "allow_guests": season["allow_guests"]},
         "teams": teams, "matches": matches, "round_dates": round_dates,
     }
 
@@ -87,7 +90,15 @@ def import_season(db, data):
             "This file came from a newer version of the app — update first.")
     name = (data.get("season") or {}).get("name") or "Imported Season"
 
-    cur = db.execute("INSERT INTO seasons (name) VALUES (?)", (name,))
+    meta = data.get("season") or {}
+    fmt = meta.get("playoff_format") or "double"
+    if fmt not in ("single", "double"):
+        fmt = "double"
+    cur = db.execute(
+        """INSERT INTO seasons (name, playoff_format, allow_sk_add_players,
+             allow_guests) VALUES (?,?,?,?)""",
+        (name, fmt, 1 if meta.get("allow_sk_add_players") else 0,
+         1 if meta.get("allow_guests") else 0))
     sid = cur.lastrowid
 
     team_map, player_map = {}, {}
